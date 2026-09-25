@@ -90,12 +90,12 @@ public class RelicEntityBrowserPanel : DockPanel
         new("logic_relay", "Logic", "Target forwarding relay."),
         new("logic_counter", "Logic", "Fires after N inputs."),
         new("logic_compare", "Logic", "Compares A vs B."),
-        new("func_door", "Movers", "Sliding door (brushes in TrenchBroom).", false),
-        new("func_door_rotating", "Movers", "Rotating door.", false),
-        new("func_button", "Movers", "Trigger button.", false),
-        new("func_elevator", "Movers", "Elevator platform.", false),
-        new("func_platform", "Movers", "Moving platform.", false),
-        new("func_train", "Movers", "Path train.", false),
+        new("func_door", "Movers", "Sliding door (brushes in TrenchBroom). Keys: _normal, _normalN.", false),
+        new("func_door_rotating", "Movers", "Rotating door. Keys: _normal, _normalN.", false),
+        new("func_button", "Movers", "Trigger button. Keys: _normal, _normalN.", false),
+        new("func_elevator", "Movers", "Elevator platform. Keys: _normal, _normalN.", false),
+        new("func_platform", "Movers", "Moving platform. Keys: _normal, _normalN.", false),
+        new("func_train", "Movers", "Path train. Keys: _normal, _normalN.", false),
         new("objective", "Objectives", "Mission objective (id, description)."),
         new("checkpoint", "Objectives", "Checkpoint + respawn notify."),
         new("mission_start", "Objectives", "Mission start gate."),
@@ -110,6 +110,11 @@ public class RelicEntityBrowserPanel : DockPanel
         using (paper.Column("ent_root").Width(width).Height(height).Padding(0, 0, 8, 12).Gap(8).Enter())
         {
             SectionHeader(paper, "ent_h", "Relic Entity Browser", first: true);
+
+            paper.Box("ent_normhint").Height(UnitValue.Auto)
+                .Text("Face normals: brush entities take _normal \"x y z\" (all faces) or _normalN (face N). " +
+                      "Imported meshes also carry a Face Normals component for per-face Inspector overrides.", font)
+                .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
             SettingsRow(paper, "ent_search", "Search", () =>
                 Origami.TextField(paper, "ent_search_v", _search, v => _search = v).Show());

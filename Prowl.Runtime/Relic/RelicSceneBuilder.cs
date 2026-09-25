@@ -127,10 +127,22 @@ public static class RelicSceneBuilder
             }
             if (options.BuildCollision)
             {
-                var mc = go.AddComponent<MeshCollider>();
+                // RelicBrushCollider: same collision, no wireframe spam in Scene view.
+                var mc = go.AddComponent<RelicBrushCollider>();
                 mc.Mesh = new AssetRef<Mesh>(mesh);
             }
             go.Transform.LocalPosition = Float3.Zero;
+            var fn = go.AddComponent<RelicFaceNormal>();
+            fn.Mesh = new AssetRef<Mesh>(mesh);
+            foreach (var r in g.Ranges)
+                fn.Ranges.Add(new RelicFaceNormal.FaceInfo
+                {
+                    FaceIndex = r.FaceIndex,
+                    Texture = r.Texture,
+                    StartVertex = r.StartVertex,
+                    VertexCount = r.VertexCount,
+                    BaseNormal = r.Normal
+                });
             scene.Add(go);
             try { go.SetParent(worldRoot); } catch { }
             report.WorldMeshes++;
@@ -473,6 +485,9 @@ public static class RelicSceneBuilder
                     report.Warnings++;
                     report.GeometryIssues.Add($"{cls} '{m.MoverName}' {issue}");
                 }
+                // TrenchBroom normal overrides: _normal (all faces) / _normalN (face N).
+                // Applied after validation — a deliberate override is not a defect.
+                RelicFaceNormal.ApplyMapOverrides(mgeo, RelicFaceNormal.ParseMapKeys(e.Properties));
                 var mgroups = RelicBrushBuilder.GroupByTexture(mgeo);
                 foreach (var g in mgroups)
                 {
@@ -489,9 +504,20 @@ public static class RelicSceneBuilder
                     }
                     if (options.BuildCollision)
                     {
-                        var mc = part.AddComponent<MeshCollider>();
+                        var mc = part.AddComponent<RelicBrushCollider>();
                         mc.Mesh = new AssetRef<Mesh>(mesh);
                     }
+                    var mfn = part.AddComponent<RelicFaceNormal>();
+                    mfn.Mesh = new AssetRef<Mesh>(mesh);
+                    foreach (var r in g.Ranges)
+                        mfn.Ranges.Add(new RelicFaceNormal.FaceInfo
+                        {
+                            FaceIndex = r.FaceIndex,
+                            Texture = r.Texture,
+                            StartVertex = r.StartVertex,
+                            VertexCount = r.VertexCount,
+                            BaseNormal = r.Normal
+                        });
                     scene.Add(part);
                     try { part.SetParent(go); } catch { }
                     report.WorldMeshes++;

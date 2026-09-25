@@ -18,7 +18,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Physics/Colliders/Mesh Collider")]
 [ComponentIcon("\uf1b3")] // Cubes
-public sealed class MeshCollider : Collider
+public class MeshCollider : Collider
 {
     [SerializeField] private AssetRef<Mesh> mesh;
     [SerializeField] private bool convex = false;

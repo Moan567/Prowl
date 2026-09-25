@@ -127,6 +127,153 @@ public class RelicGeometryTests : RuntimeTestBase
     }
 
     [Fact]
+    public void BrushColliders_AreQuiet_NoBareMeshColliders()
+    {
+        // Imported brush collision must not spam Scene view wireframes:
+        // every MeshCollider on imported geometry is a RelicBrushCollider.
+        var scene = CreateScene();
+        var map = RelicMapParser.Load(SimpleCubePath);
+        RelicSceneBuilder.Build(map, scene, new RelicBuildOptions());
+        var all = scene.FindObjectsOfType<MeshCollider>();
+        Assert.NotEmpty(all);
+        var quiet = scene.FindObjectsOfType<RelicBrushCollider>();
+        Assert.Equal(all.Length, quiet.Length);
+    }
+
+    [Fact]
+    public void FaceRanges_CubeHasSixContiguousRuns()
+    {
+        var map = RelicMapParser.Load(SimpleCubePath);
+        var geo = RelicBrushBuilder.BuildBrushes(map.Brushes);
+        Assert.Equal(6, geo.FaceRanges.Count);
+        int total = 0;
+        foreach (var r in geo.FaceRanges)
+        {
+            Assert.Equal(4, r.VertexCount);
+            total += r.VertexCount;
+        }
+        Assert.Equal(geo.Vertices.Length, total);
+
+        // Group-local ranges cover every group vertex exactly once.
+        foreach (var g in RelicBrushBuilder.GroupByTexture(geo))
+        {
+            int covered = 0;
+            foreach (var r in g.Ranges) covered += r.VertexCount;
+            Assert.Equal(g.Vertices.Count, covered);
+        }
+    }
+
+    [Fact]
+    public void FaceNormalOverride_AppliesPerFaceOnly()
+    {
+        var map = RelicMapParser.Load(SimpleCubePath);
+        var geo = RelicBrushBuilder.BuildBrushes(map.Brushes);
+        var group = Assert.Single(RelicBrushBuilder.GroupByTexture(geo));
+        var mesh = RelicBrushBuilder.BuildMesh(group, "TestOverride");
+
+        var go = CreateGameObject("OverrideTest");
+        var fn = go.AddComponent<RelicFaceNormal>();
+        fn.Mesh = new AssetRef<Mesh>(mesh);
+        foreach (var r in group.Ranges)
+            fn.Ranges.Add(new RelicFaceNormal.FaceInfo
+            {
+                FaceIndex = r.FaceIndex,
+                Texture = r.Texture,
+                StartVertex = r.StartVertex,
+                VertexCount = r.VertexCount,
+                BaseNormal = r.Normal
+            });
+        var target = new Float3(0, 1, 0);
+        fn.Overrides.Add(new RelicFaceNormal.NormalOverride { FaceIndex = 2, Normal = target });
+        fn.Apply();
+
+        var normals = mesh.Normals;
+        Assert.Equal(mesh.VertexCount, normals.Length);
+        foreach (var r in group.Ranges)
+        {
+            for (int i = 0; i < r.VertexCount; i++)
+            {
+                var got = normals[r.StartVertex + i];
+                if (r.FaceIndex == 2)
+                {
+                    Assert.Equal(target.X, got.X, 4);
+                    Assert.Equal(target.Y, got.Y, 4);
+                    Assert.Equal(target.Z, got.Z, 4);
+                }
+                else
+                {
+                    Assert.Equal(r.Normal.X, got.X, 4);
+                    Assert.Equal(r.Normal.Y, got.Y, 4);
+                    Assert.Equal(r.Normal.Z, got.Z, 4);
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void MapKeys_ParseNormal_AllAndPerFace()
+    {
+        var props = new Dictionary<string, string>
+        {
+            ["_normal"] = "0 0 1",
+            ["_normal2"] = "1 0 0",
+            ["targetname"] = "door1"
+        };
+        var keys = RelicFaceNormal.ParseMapKeys(props);
+        // Quake (0,0,1) up -> Prowl (0,1,0); Quake (1,0,0) -> Prowl (1,0,0).
+        Assert.Equal(new Float3(0, 1, 0), keys[-1]);
+        Assert.Equal(new Float3(1, 0, 0), keys[2]);
+        Assert.DoesNotContain(0, keys.Keys);
+    }
+
+    [Fact]
+    public void MapKeys_FuncDoorAppliesFaceNormal()
+    {
+        // func_door box with _normal1: face 1 re-aimed, other faces keep auto normals.
+        const string doorMap = "{\"classname\" \"worldspawn\" " +
+            "{ ( -512 -512 -16 ) ( 512 -512 -16 ) ( 512 512 -16 ) brick 0 0 0 1 1 " +
+            "( -512 -512 128 ) ( -512 512 128 ) ( 512 512 128 ) brick 0 0 0 1 1 " +
+            "( -512 -512 -16 ) ( -512 -16 128 ) ( 512 -16 128 ) brick 0 0 0 1 1 " +
+            "( -512 512 -16 ) ( 512 512 -16 ) ( 512 300 128 ) brick 0 0 0 1 1 " +
+            "( -512 -512 -16 ) ( -512 -16 0 ) ( -512 300 -16 ) brick 0 0 0 1 1 " +
+            "( 512 -512 -16 ) ( 512 300 -16 ) ( 512 -16 0 ) brick 0 0 0 1 1 } }" +
+            "{\"classname\" \"player_start\" \"origin\" \"0 0 64\"}" +
+            "{\"classname\" \"func_door\" \"targetname\" \"door1\" \"_normal1\" \"0 1 0\" " +
+            "{ ( -64 -64 0 ) ( 64 -64 0 ) ( 64 64 0 ) brick 0 0 0 1 1 " +
+            "( -64 -64 64 ) ( -64 64 64 ) ( 64 64 64 ) brick 0 0 0 1 1 " +
+            "( -64 -64 0 ) ( -64 -64 64 ) ( 64 -64 64 ) brick 0 0 0 1 1 " +
+            "( -64 64 0 ) ( 64 64 0 ) ( 64 64 64 ) brick 0 0 0 1 1 " +
+            "( -64 -64 0 ) ( -64 0 64 ) ( -64 64 0 ) brick 0 0 0 1 1 " +
+            "( 64 -64 0 ) ( 64 64 0 ) ( 64 0 64 ) brick 0 0 0 1 1 } }";
+        var scene = CreateScene();
+        var map = RelicMapParser.Parse(doorMap);
+        var report = RelicSceneBuilder.Build(map, scene, new RelicBuildOptions { LoadTextures = false });
+        Assert.Empty(report.GeometryIssues);
+
+        bool sawOverride = false;
+        foreach (var fn in scene.FindObjectsOfType<RelicFaceNormal>())
+        {
+            if (fn == null) continue;
+            var m = fn.Mesh.Res;
+            if (!m.IsValid()) continue;
+            var normals = m.Normals;
+            foreach (var r in fn.Ranges)
+            {
+                var got = normals[r.StartVertex];
+                if (r.FaceIndex == 1 && fn.GameObject.Name.StartsWith("Part_"))
+                {
+                    // Mover part meshes: Quake _normal1 "0 1 0" -> Prowl (0,0,-1).
+                    Assert.Equal(0f, got.X, 4);
+                    Assert.Equal(0f, got.Y, 4);
+                    Assert.Equal(-1f, got.Z, 4);
+                    sawOverride = true;
+                }
+            }
+        }
+        Assert.True(sawOverride, "No mover part mesh carried the _normal1 override.");
+    }
+
+    [Fact]
     public void CoordinateConversion_PreservesWindingHandedness()
     {
         // QuakeToProwl must be a proper rotation (det +1), not a mirror:

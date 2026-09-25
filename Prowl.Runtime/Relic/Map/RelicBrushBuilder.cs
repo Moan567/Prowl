@@ -18,6 +18,21 @@ public static class RelicBrushBuilder
 {
     public const float DefaultUnitScale = 1f / 32f;
 
+    /// <summary>
+    /// One emitted brush face: a contiguous vertex run sharing one normal.
+    /// StartVertex/VertexCount address BuiltGeometry arrays (or a MaterialGroup's
+    /// lists for group-local ranges). FaceIndex is the sequential emitted-face
+    /// number (faces fully clipped away produce no range).
+    /// </summary>
+    public struct FaceRange
+    {
+        public int FaceIndex;
+        public string Texture;
+        public int StartVertex;
+        public int VertexCount;
+        public Float3 Normal;
+    }
+
     public sealed class BuiltGeometry
     {
         public Float3[] Vertices = Array.Empty<Float3>();
@@ -27,6 +42,8 @@ public static class RelicBrushBuilder
         /// <summary>Per-vertex texture name, parallel to Vertices.</summary>
         public string[] Textures = Array.Empty<string>();
         public AABB Bounds;
+        /// <summary>Per-face vertex runs, in emission order.</summary>
+        public List<FaceRange> FaceRanges { get; } = new();
     }
 
     public sealed class MaterialGroup
@@ -36,6 +53,8 @@ public static class RelicBrushBuilder
         public List<Float3> Normals { get; } = new();
         public List<Float2> UVs { get; } = new();
         public List<uint> Indices { get; } = new();
+        /// <summary>Per-face runs in this group's vertex order (FaceIndex = global face number).</summary>
+        public List<FaceRange> Ranges { get; } = new();
     }
 
     /// <summary>Convert a Quake-space point (inches, Z-up) to Prowl-space (meters, Y-up).</summary>
@@ -57,6 +76,7 @@ public static class RelicBrushBuilder
         var uvs = new List<Float2>();
         var indices = new List<uint>();
         var textures = new List<string>();
+        var faceRanges = new List<FaceRange>();
         var boundsMin = new Float3(float.MaxValue, float.MaxValue, float.MaxValue);
         var boundsMax = new Float3(float.MinValue, float.MinValue, float.MinValue);
         bool hasAny = false;
@@ -101,6 +121,14 @@ public static class RelicBrushBuilder
                     indices.Add(i1);
                     indices.Add(i2);
                 }
+                faceRanges.Add(new FaceRange
+                {
+                    FaceIndex = faceRanges.Count,
+                    Texture = face.Texture,
+                    StartVertex = (int)baseIndex,
+                    VertexCount = poly.Count,
+                    Normal = nProwl
+                });
             }
         }
 
@@ -113,6 +141,7 @@ public static class RelicBrushBuilder
             Textures = textures.ToArray(),
             Bounds = hasAny ? new AABB(boundsMin, boundsMax) : new AABB(Float3.Zero, Float3.Zero)
         };
+        geo.FaceRanges.AddRange(faceRanges);
         return geo;
     }
 
@@ -139,6 +168,9 @@ public static class RelicBrushBuilder
         foreach (var g in order)
         {
             indexRemap.Clear();
+            int rangeCursor = 0;
+            int runFace = -1;
+            int runStart = 0;
             for (int t = 0; t < geo.Indices.Length; t += 3)
             {
                 uint triIdx0 = geo.Indices[t];
@@ -154,12 +186,48 @@ public static class RelicBrushBuilder
                         g.Vertices.Add(geo.Vertices[src]);
                         g.Normals.Add(geo.Normals[src]);
                         g.UVs.Add(geo.UVs[src]);
+                        // Track per-face runs (same-face triangles are contiguous
+                        // in emission order, so runs stay contiguous here too).
+                        int face = FaceAtVertex(geo, ref rangeCursor, (int)src);
+                        if (face != runFace)
+                        {
+                            if (runFace >= 0)
+                                g.Ranges.Add(RangeFor(geo, runFace, runStart, g.Vertices.Count - 1 - runStart));
+                            runFace = face;
+                            runStart = (int)dst;
+                        }
                     }
                     g.Indices.Add(dst);
                 }
             }
+            if (runFace >= 0)
+                g.Ranges.Add(RangeFor(geo, runFace, runStart, g.Vertices.Count - runStart));
         }
         return order;
+    }
+
+    private static FaceRange RangeFor(RelicBrushBuilder.BuiltGeometry geo, int face, int start, int count)
+    {
+        var src = geo.FaceRanges[face];
+        return new FaceRange
+        {
+            FaceIndex = face,
+            Texture = src.Texture,
+            StartVertex = start,
+            VertexCount = count,
+            Normal = src.Normal
+        };
+    }
+
+    /// <summary>Which emitted face owns a geometry vertex (cursor advances monotonically).</summary>
+    private static int FaceAtVertex(RelicBrushBuilder.BuiltGeometry geo, ref int cursor, int vertex)
+    {
+        var ranges = geo.FaceRanges;
+        if (ranges.Count == 0) return -1;
+        cursor = Math.Clamp(cursor, 0, ranges.Count - 1);
+        while (cursor + 1 < ranges.Count && ranges[cursor + 1].StartVertex <= vertex) cursor++;
+        while (cursor > 0 && ranges[cursor].StartVertex > vertex) cursor--;
+        return cursor;
     }
 
     public static Mesh BuildMesh(MaterialGroup group, string name = "RelicBrushMesh")
