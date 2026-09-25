@@ -69,6 +69,11 @@ public static class RelicSceneBuilder
         options ??= new RelicBuildOptions();
         var report = new RelicBuildReport();
 
+        // Snapshot before building so every GameObject created below can be tagged
+        // as map-generated. Hot-reload clears exactly those on the next import.
+        var before = new HashSet<GameObject>(scene.AllObjects);
+        string? sourcePath = map.SourcePath;
+
         // ---- worldspawn geometry (skip trigger volumes + mover brushes) ----
         var moverOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -173,7 +178,102 @@ public static class RelicSceneBuilder
             report.Messages.Add("No player_start found — add one in TrenchBroom to walk around on Play.");
         }
 
+        TagGeneratedObjects(scene, before, sourcePath);
+
         return report;
+    }
+
+    /// <summary>Tag everything <see cref="Build"/> just added so hot-reload can clear it later.</summary>
+    private static void TagGeneratedObjects(Scene scene, HashSet<GameObject> before, string? sourcePath)
+    {
+        foreach (var go in scene.AllObjects.ToArray())
+        {
+            if (go.IsNotValid() || before.Contains(go)) continue;
+            try
+            {
+                if (go.GetComponent<RelicMapGenerated>().IsNotValid())
+                {
+                    var marker = go.AddComponent<RelicMapGenerated>();
+                    if (marker.IsValid()) marker.SourceMapPath = sourcePath ?? string.Empty;
+                }
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>
+    /// Remove all map-generated objects from the scene (hot-reload / clean reimport).
+    /// Only touches objects tagged by <see cref="Build"/> plus the legacy "Relic Worldspawn"
+    /// root from before tagging existed. User-placed objects are never removed.
+    /// </summary>
+    /// <param name="onlyMapPath">When set, only clear objects built from this .map path.</param>
+    /// <returns>Number of root objects removed.</returns>
+    public static int ClearGeneratedObjects(Scene scene, string? onlyMapPath = null)
+    {
+        var tagged = new HashSet<GameObject>();
+        foreach (var marker in scene.FindObjectsOfType<RelicMapGenerated>())
+        {
+            if (marker.IsNotValid()) continue;
+            var go = marker.GameObject;
+            if (go.IsNotValid()) continue;
+            if (!string.IsNullOrEmpty(onlyMapPath) &&
+                !string.IsNullOrEmpty(marker.SourceMapPath) &&
+                !string.Equals(marker.SourceMapPath, onlyMapPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+            tagged.Add(go);
+        }
+
+        // Legacy scenes imported before tagging: the world root was never marked.
+        if (tagged.Count == 0)
+        {
+            foreach (var go in scene.AllObjects.ToArray())
+            {
+                if (go.IsNotValid()) continue;
+                if (go.Parent.IsValid()) continue;
+                if (string.Equals(go.Name, "Relic Worldspawn", StringComparison.Ordinal))
+                    tagged.Add(go);
+            }
+        }
+
+        if (tagged.Count == 0) return 0;
+
+        // Remove topmost tagged roots only — children go with their parent via Remove().
+        var roots = tagged.Where(go =>
+        {
+            var p = go.Parent;
+            while (p.IsValid())
+            {
+                if (tagged.Contains(p)) return false;
+                p = p.Parent;
+            }
+            return true;
+        }).ToList();
+
+        int removed = 0;
+        foreach (var root in roots)
+        {
+            try
+            {
+                if (root.IsNotValid() || root.Scene != scene) continue;
+                scene.Remove(root);
+                root.Destroy();
+                removed++;
+            }
+            catch { }
+        }
+        return removed;
+    }
+
+    /// <summary>
+    /// Full reimport: parse the .map, clear previously generated objects, rebuild.
+    /// This is what the TrenchBroom auto-reload calls on every save.
+    /// A scene holds one map: objects generated from a different .map path are kept.
+    /// </summary>
+    public static RelicBuildReport Reimport(string mapPath, Scene scene, RelicBuildOptions? options = null)
+    {
+        var map = Map.RelicMapParser.Load(mapPath);
+        ClearGeneratedObjects(scene, mapPath);
+        return Build(map, scene, options);
     }
 
     // Returns true if an entity GameObject was created.
@@ -305,11 +405,24 @@ public static class RelicSceneBuilder
             {
                 var go = New("Fog");
                 var f = go.AddComponent<RelicFog>();
+                f.Mode = e.GetString("mode", "exp2").ToLowerInvariant() switch
+                {
+                    "off" or "none" => RelicFog.RelicFogMode.Off,
+                    "linear" => RelicFog.RelicFogMode.Linear,
+                    "exp" or "exponential" => RelicFog.RelicFogMode.Exponential,
+                    _ => RelicFog.RelicFogMode.ExponentialSquared
+                };
                 f.FogColor = ParseColor01(e.GetString("color", "120 140 180"));
                 f.Density = e.GetFloat("density", 0.02f);
-                var fv = go.AddComponent<FogVolume>();
-                fv.Shape = FogVolumeShape.Global;
-                fv.ColorTint = f.FogColor;
+                f.FogStart = e.GetFloat("start", 8f);
+                f.FogEnd = e.GetFloat("end", 90f);
+                f.Volumetric = e.GetBool("volumetric", true);
+                f.VolumetricDensity = e.GetFloat("volumetric_density", f.Density);
+                f.VolumetricScattering = e.GetFloat("scattering", 0.5f);
+                f.VolumetricMaxDistance = e.GetFloat("maxdistance", 100f);
+                f.VolumetricAmbientIntensity = e.GetFloat("ambient", 0.3f);
+                // No FogVolume: RelicFog.Apply drives Scene.Fog + the volumetric
+                // effect's global density directly, so nothing double-adds.
                 return true;
             }
             case "env_postprocess":

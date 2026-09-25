@@ -483,6 +483,10 @@ public class EditorApplication : Game
             ThumbnailGenerator.ProcessOne();
         }
 
+        // TrenchBroom .map hot-reload: reimport the current map shortly after it
+        // is saved externally, so Scene view updates in real time. Main-thread only.
+        try { Relic.RelicMapAutoReload.Update(); } catch { }
+
         // Check for script recompilation. Not gated behind canProcessAssets while a startup compile is
         // outstanding: the project's first scene load is waiting on that compile, and reimport gating
         // (or an unfocused window) must not be able to strand the editor with no scene open.

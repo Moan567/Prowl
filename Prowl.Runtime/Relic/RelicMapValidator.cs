@@ -47,6 +47,10 @@ public static class RelicMapValidator
                                    e.ClassName.Equals("light_spot", StringComparison.OrdinalIgnoreCase) ||
                                    e.ClassName.Equals("light_sun", StringComparison.OrdinalIgnoreCase)))
             Add("warning", "No lights — the map will render black. Add light / light_sun in TrenchBroom.");
+        if (!map.Entities.Any(e => e.ClassName.Equals("env_fog", StringComparison.OrdinalIgnoreCase)))
+            Add("info", "No env_fog — scene default fog applies. Add env_fog for analytic + volumetric fog.");
+        if (map.Entities.Count(e => e.ClassName.Equals("env_fog", StringComparison.OrdinalIgnoreCase)) > 1)
+            Add("warning", "Multiple env_fog entities — they all write the same scene fog; keep one.");
 
         foreach (var e in map.Entities)
         {

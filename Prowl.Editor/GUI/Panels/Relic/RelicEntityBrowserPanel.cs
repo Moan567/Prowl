@@ -58,7 +58,7 @@ public class RelicEntityBrowserPanel : DockPanel
         new("light", "Environment", "Point light (color, intensity, radius)."),
         new("light_spot", "Environment", "Spot light (angles aim)."),
         new("light_sun", "Environment", "Directional sun (angles aim)."),
-        new("env_fog", "Environment", "Fog color + density."),
+        new("env_fog", "Environment", "Fog: analytic + volumetric (mode, color, density, range)."),
         new("env_postprocess", "Environment", "Bloom, exposure, tonemap."),
         new("env_rain", "Environment", "Rain weather."),
         new("env_snow", "Environment", "Snow weather."),

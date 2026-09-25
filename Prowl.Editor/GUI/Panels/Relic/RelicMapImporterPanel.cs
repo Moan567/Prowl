@@ -12,6 +12,7 @@ using System.Linq;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Relic;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -93,6 +94,20 @@ public class RelicMapImporterPanel : DockPanel
             SettingsRow(paper, "relic_opt_scale", "Unit Scale (m/unit)", () =>
                 Origami.Slider(paper, "relic_opt_scale_v", _unitScale, v => _unitScale = v, 1f / 64f, 1f).Format("F4").Show());
 
+            // Live hot-reload: TrenchBroom save -> scene updates in real time.
+            SettingsRow(paper, "relic_opt_auto", "Auto-reload on save", () =>
+                Origami.Checkbox(paper, "relic_opt_auto_v", RelicMapAutoReload.Enabled, v => RelicMapAutoReload.Enabled = v).Show());
+            {
+                string watchText = RelicMapAutoReload.IsWatching
+                    ? $"Watching — {RelicMapAutoReload.Status}"
+                    : string.IsNullOrEmpty(RelicMapAutoReload.Status)
+                        ? "Auto-reload idle — import a .map first."
+                        : RelicMapAutoReload.Status;
+                paper.Box("relic_autoreload").Height(UnitValue.Auto)
+                    .Text(watchText, font).TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            }
+
             // Status + last report.
             paper.Box("relic_status").Height(UnitValue.Auto)
                 .Text(_status, font).TextColor(EditorTheme.Ink400)
@@ -173,10 +188,14 @@ public class RelicMapImporterPanel : DockPanel
                 LoadTextures = _loadTextures,
                 ProjectRoot = Project.Current?.RootPath
             };
+            // Clean reimport: remove previously generated objects so repeated
+            // imports (manual or auto) never duplicate the level.
+            RelicSceneBuilder.ClearGeneratedObjects(scene, _mapPath);
             var report = RelicSceneBuilder.Build(map, scene, options);
             _lastReport = report;
             _issues = RelicMapValidator.Validate(map);
             EditorSceneManager.MarkDirty();
+            RelicMapAutoReload.NotifyImported(_mapPath, options);
             _status = reimport
                 ? $"Reimported '{Path.GetFileName(_mapPath)}' — press Play to walk around."
                 : $"Imported '{Path.GetFileName(_mapPath)}' — {report.WorldTriangles} tris, {report.EntitiesSpawned} entities. Press Play.";

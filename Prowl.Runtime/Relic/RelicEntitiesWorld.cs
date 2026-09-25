@@ -328,10 +328,94 @@ public sealed class RelicMissionGate : MonoBehaviour
 [AddComponentMenu("Relic/Environment/Fog")]
 public sealed class RelicFog : MonoBehaviour
 {
+    public enum RelicFogMode { Off, Linear, Exponential, ExponentialSquared }
+
+    // ---- Analytic (distance) fog: written straight into Scene.Fog ----
+    public RelicFogMode Mode = RelicFogMode.ExponentialSquared;
     public Color FogColor = new(0.47f, 0.55f, 0.7f, 1f);
     public float Density = 0.02f;
     public float FogStart = 8f;
     public float FogEnd = 90f;
+
+    // ---- Volumetric (ray-marched) fog: managed on every scene camera ----
+    /// <summary>When true, RelicFog keeps a VolumetricFogEffect on each camera in sync.</summary>
+    public bool Volumetric = true;
+    /// <summary>Base world-space density marched everywhere (volumes add on top).</summary>
+    public float VolumetricDensity = 0.02f;
+    /// <summary>Henyey-Greenstein anisotropy: 0 = isotropic, &gt;0 = forward-scattering.</summary>
+    public float VolumetricScattering = 0.5f;
+    /// <summary>How far the march reaches, in meters.</summary>
+    public float VolumetricMaxDistance = 100f;
+    /// <summary>Sky-bounce ambient so shadowed fog keeps color instead of going black.</summary>
+    public float VolumetricAmbientIntensity = 0.3f;
+    /// <summary>Uncheck to leave camera effects entirely alone (manual setup).</summary>
+    public bool ManageVolumetricEffect = true;
+
+    /// <summary>True while this component owns auto-added camera effects.</summary>
+    public bool AutoVolumetric;
+
+    public override void OnEnable() => Apply();
+    public override void OnValidate() => Apply();
+
+    /// <summary>
+    /// Push everything to the scene: analytic fog params plus the volumetric
+    /// effect on every camera. Idempotent — safe to call on every edit.
+    /// </summary>
+    public void Apply()
+    {
+        var scene = GameObject.Scene;
+        if (!scene.IsValid()) return;
+
+        var fog = scene.Fog;
+        fog.Mode = Mode switch
+        {
+            RelicFogMode.Off => Resources.Scene.FogParams.FogMode.Off,
+            RelicFogMode.Linear => Resources.Scene.FogParams.FogMode.Linear,
+            RelicFogMode.Exponential => Resources.Scene.FogParams.FogMode.Exponential,
+            _ => Resources.Scene.FogParams.FogMode.ExponentialSquared
+        };
+        fog.Color = FogColor;
+        fog.Density = Math.Max(0f, Density);
+        fog.Start = Math.Max(0f, FogStart);
+        fog.End = Math.Max(fog.Start + 0.01f, FogEnd);
+        scene.Fog = fog;
+
+        if (ManageVolumetricEffect)
+            SyncVolumetricEffects(scene);
+    }
+
+    private void SyncVolumetricEffects(Resources.Scene scene)
+    {
+        foreach (var cam in scene.FindObjectsOfType<Camera>())
+        {
+            if (!cam.IsValid()) continue;
+            Rendering.VolumetricFogEffect? existing = null;
+            foreach (var fx in cam.Effects)
+                if (fx is Rendering.VolumetricFogEffect vf) { existing = vf; break; }
+
+            if (Volumetric && Mode != RelicFogMode.Off)
+            {
+                var effect = existing;
+                if (effect == null)
+                {
+                    effect = new Rendering.VolumetricFogEffect();
+                    cam.Effects.Add(effect);
+                    AutoVolumetric = true;
+                }
+                effect.GlobalDensity = Math.Max(0f, VolumetricDensity);
+                effect.GlobalColorTint = FogColor;
+                effect.Scattering = VolumetricScattering;
+                effect.MaxDistance = Math.Max(0.1f, VolumetricMaxDistance);
+                effect.AmbientIntensity = Math.Max(0f, VolumetricAmbientIntensity);
+            }
+            else if (existing != null && AutoVolumetric)
+            {
+                cam.Effects.Remove(existing);
+                try { existing.OnDisable(); } catch { }
+                AutoVolumetric = false;
+            }
+        }
+    }
 }
 
 [AddComponentMenu("Relic/Environment/Post Process")]

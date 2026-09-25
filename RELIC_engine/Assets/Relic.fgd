@@ -73,7 +73,15 @@
 
 @PointClass color(100 150 200) size(-16 -16 -16, 16 16 16) = env_fog : "Fog" [
     color(color255) : "Color" : "120 140 180"
-    density(float) : "Density" : "0.002"
+    density(float) : "Density" : "0.02"
+    mode(choices) : "Mode" : "exp2" = [ "off" : "Off" "linear" : "Linear" "exp" : "Exponential" "exp2" : "Exponential Squared" ]
+    start(float) : "Linear Start" : "8.0"
+    end(float) : "Linear End" : "90.0"
+    volumetric(choices) : "Volumetric" : 1 = [ 0 : "Off" 1 : "On" ]
+    volumetric_density(float) : "Volumetric Density" : "0.02"
+    scattering(float) : "Scattering (0-0.99)" : "0.5"
+    maxdistance(float) : "Max Distance" : "100.0"
+    ambient(float) : "Ambient" : "0.3"
     targetname(string) : "Name"
 ]
 

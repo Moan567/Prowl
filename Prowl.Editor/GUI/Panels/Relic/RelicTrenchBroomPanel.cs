@@ -9,6 +9,7 @@ using System.IO;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Relic;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -79,6 +80,19 @@ public class RelicTrenchBroomPanel : DockPanel
             using (paper.Row("tb_row2").Height(32).Gap(8).Enter())
             {
                 Origami.Button(paper, "tb_reimport", $"{EditorIcons.ArrowsRotate}  Reimport Current Map", () => Reimport()).Show();
+            }
+            SettingsRow(paper, "tb_auto", "Auto-reload on save", () =>
+                Origami.Checkbox(paper, "tb_auto_v", RelicMapAutoReload.Enabled, v => RelicMapAutoReload.Enabled = v).Show());
+            {
+                string watchText = RelicMapAutoReload.IsWatching
+                    ? $"Watching — {RelicMapAutoReload.Status}"
+                    : string.IsNullOrEmpty(RelicMapAutoReload.Status)
+                        ? "Auto-reload idle — import a .map first."
+                        : RelicMapAutoReload.Status;
+                var f2 = font;
+                paper.Box("tb_autoreload").Height(UnitValue.Auto)
+                    .Text(watchText, f2).TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
             }
             using (paper.Row("tb_row3").Height(32).Gap(8).Enter())
             {
@@ -167,11 +181,13 @@ public class RelicTrenchBroomPanel : DockPanel
         try
         {
             var map = RelicMapParser.Load(path);
-            var report = RelicSceneBuilder.Build(map, scene,
-                new RelicBuildOptions { ProjectRoot = Project.Current?.RootPath });
+            var options = new RelicBuildOptions { ProjectRoot = Project.Current?.RootPath };
+            RelicSceneBuilder.ClearGeneratedObjects(scene, path);
+            var report = RelicSceneBuilder.Build(map, scene, options);
             foreach (var g in report.GeometryIssues) Runtime.Debug.LogError($"[Relic][Geometry] {g}");
             foreach (var m in report.MissingTextures) Runtime.Debug.LogWarning($"[Relic] Missing texture '{m}' — fallback color used.");
             EditorSceneManager.MarkDirty();
+            RelicMapAutoReload.NotifyImported(path, options);
             _status = $"Reimported '{Path.GetFileName(path)}': {report.WorldTriangles} tris, {report.EntitiesSpawned} entities.";
             Toasts.Success("Relic", _status);
         }
