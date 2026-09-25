@@ -1,0 +1,6 @@
+# Relic material: metal
+diffuse metal5_1.png
+normal metal_n.png
+specular metal_s.png
+roughness metal_r.png
+tint 0.85 0.85 0.9 1.0

@@ -1,0 +1,176 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+
+using Prowl.Editor.Core;
+using Prowl.Runtime;
+
+namespace Prowl.Editor.Theming;
+
+/// <summary>
+/// Global editor settings. Saved to AppData/Prowl/EditorSettings.json.
+/// Persists across projects. Contains preferences and the active theme.
+/// </summary>
+public class EditorSettings
+{
+    private static EditorSettings? _instance;
+    public static EditorSettings Instance => _instance ??= Load();
+
+    private static readonly string _filePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "Prowl", "EditorSettings.json");
+
+    // Preferences
+    /// <summary> Gets or sets the default directory for new projects. Defaults to Documents/ProwlProjects. </summary>
+    public string DefaultProjectsPath { get; set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ProwlProjects");
+    public string Locale { get; set; } = "en";
+    public bool AutoSaveLayout { get; set; } = true;
+    public bool ReimportOnFocusOnly { get; set; } = true;
+    /// <summary> Gets or sets the thumbnail size in pixels for asset previews. Defaults to 32. </summary>
+    public int ThumbnailSize { get; set; } = 32;
+
+    /// <summary> Gets or sets the editor window X position in screen coordinates. -1 means auto-place. </summary>
+    public int WindowX { get; set; } = -1;
+
+    /// <summary> Gets or sets the editor window Y position in screen coordinates. -1 means auto-place. </summary>
+    public int WindowY { get; set; } = -1;
+
+    /// <summary> Gets or sets the editor window width in pixels. Defaults to 1280. </summary>
+    public int WindowWidth { get; set; } = 1280;
+
+    /// <summary> Gets or sets the editor window height in pixels. Defaults to 800. </summary>
+    public int WindowHeight { get; set; } = 800;
+
+    public bool WindowMaximized { get; set; } = false;
+
+    /// <summary> Gets or sets whether the editor waits for the display before presenting a frame. Play mode ignores this and lets the game decide. </summary>
+    public bool VSync { get; set; } = true;
+
+    /// <summary> Gets or sets the frame rate the editor is paced to. 0 is unlimited. Play mode ignores this and lets the game decide. </summary>
+    public int TargetFrameRate { get; set; } = 0;
+
+    /// <summary> Gets or sets the frame rate the editor is paced to while its window is not focused. 0 means no separate limit. Play mode ignores this and lets the game decide. </summary>
+    public int UnfocusedFrameRate { get; set; } = 5;
+
+    // Shortcuts only user-overridden bindings are stored
+    /// <summary> Gets or sets the dictionary of user-overridden shortcut bindings, keyed by action name. Only overridden bindings are stored. </summary>
+    public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();
+
+    // IDs of interactive guides/tutorials the user has already completed or skipped.
+    /// <summary> Gets or sets the list of interactive guide IDs the user has completed or skipped. </summary>
+    public List<string> SeenGuides { get; set; } = new();
+
+    /// <summary>Serialized per-scene-tool settings, keyed by settings type name. Per-user rather
+    /// than per-project: a brush size follows the user, it is not committed with the scene.</summary>
+    public Dictionary<string, string> SceneToolSettings { get; set; } = new();
+
+    // Theme
+    /// <summary> Gets or sets the current editor theme data. Defaults to the built-in theme. </summary>
+    public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();
+
+    /// <summary>Apply the current theme to EditorTheme's static fields.</summary>
+    public void ApplyTheme()
+    {
+        var t = Theme;
+        t.InitRamps();
+
+        // Origami's default theme is the base; this data is the customization overlaid on top of it
+        // (see EditorTheme.BuildOrigamiTheme). SyncOrigami below rebuilds the live palette from it.
+        EditorTheme.Customization = t;
+
+        EditorTheme.DefaultFontName = t.DefaultFontName;
+        EditorTheme.DefaultBoldFontName = t.DefaultBoldFontName;
+
+        EditorApplication.Instance?.InitializeFont();
+
+        EditorTheme.UserScale = t.UserScale;
+
+        // Sizing
+        EditorTheme.MenuBarHeight = t.MenuBarHeight;
+        EditorTheme.StatusBarHeight = t.StatusBarHeight;
+        EditorTheme.RowHeight = t.RowHeight;
+        EditorTheme.FontSize = t.FontSize;
+        EditorTheme.LabelWidth = t.LabelWidth;
+        EditorTheme.Spacing = t.Spacing;
+        EditorTheme.Padding = t.Padding;
+        EditorTheme.SplitterSize = t.DockSpacing;
+        EditorTheme.DockPadding = t.DockSpacing;
+        EditorTheme.TabBarHeight = t.TabBarHeight;
+        EditorTheme.TabPadding = t.TabPadding;
+        EditorTheme.Roundness = t.Roundness;
+
+        // Effects
+        EditorTheme.GlassBlur = t.GlassBlur;
+        EditorTheme.WindowOpacity = t.WindowOpacity;
+        EditorTheme.BlurAmount = t.BlurAmount;
+        EditorTheme.DropShadows = t.DropShadows;
+        EditorTheme.AccentGlow = t.AccentGlow;
+        EditorTheme.AntiAliasing = t.AntiAliasing;
+        EditorTheme.AnimatedBackground = t.AnimatedBackground;
+        EditorTheme.BackgroundSpeed = t.BackgroundSpeed;
+        EditorTheme.BackgroundStyle = t.BackgroundStyle;
+        EditorTheme.BackgroundColorA = ColorRamp.ParseHex(t.BackgroundColorA);
+        EditorTheme.BackgroundColorB = ColorRamp.ParseHex(t.BackgroundColorB);
+        EditorTheme.BgShowGradients = t.BgShowGradients;
+        EditorTheme.BackgroundVoidColor = ColorRamp.ParseHex(t.BackgroundVoidColor);
+        EditorTheme.BackgroundImagePath = t.BackgroundImagePath;
+        EditorTheme.BackgroundImageFit = t.BackgroundImageFit;
+        EditorTheme.BackgroundImageDim = t.BackgroundImageDim;
+
+        // Push the freshly-applied editor theme into Origami. Brief lerp so user-visible
+        // theme tweaks animate instead of snapping.
+        EditorTheme.SyncOrigami();
+    }
+
+    /// <summary> Serializes this instance to the editor settings JSON file on disk. Silently logs a warning on failure. </summary>
+    public void Save()
+    {
+        try
+        {
+            string dir = Path.GetDirectoryName(_filePath)!;
+            Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_filePath, json);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Failed to save editor settings: {ex.Message}");
+        }
+    }
+
+    private static EditorSettings Load()
+    {
+        try
+        {
+            if (File.Exists(_filePath))
+            {
+                var json = File.ReadAllText(_filePath);
+                var settings = JsonSerializer.Deserialize<EditorSettings>(json);
+                if (settings != null)
+                {
+                    settings.Theme.InitRamps();
+                    settings.ApplyTheme();
+                    return settings;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Failed to load editor settings: {ex.Message}");
+        }
+
+        var def = new EditorSettings();
+        def.ApplyTheme();
+        return def;
+    }
+
+    /// <summary> Resets the theme to the default, applies it, and saves the settings. </summary>
+    public void ResetTheme()
+    {
+        Theme = EditorThemeData.CreateDefault();
+        ApplyTheme();
+        Save();
+    }
+}

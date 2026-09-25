@@ -1,0 +1,27 @@
+// SimpleCube.map — RELIC geometry validation room.
+// Closed axis-aligned box: x,y in [-128,128], z in [0,128] inches.
+// Expected build: 6 faces, 12 triangles, outward normals, front faces
+// visible from outside AND inside (player_start is inside the room).
+{
+"classname" "worldspawn"
+{
+( -128 -128 0 ) ( 128 -128 0 ) ( 128 128 0 ) brick 0 0 0 1 1
+( -128 -128 128 ) ( -128 128 128 ) ( 128 128 128 ) brick 0 0 0 1 1
+( -128 -128 0 ) ( -128 128 0 ) ( -128 128 128 ) brick 0 0 0 1 1
+( 128 -128 0 ) ( 128 -128 128 ) ( 128 128 128 ) brick 0 0 0 1 1
+( -128 -128 0 ) ( -128 -128 128 ) ( 128 -128 128 ) brick 0 0 0 1 1
+( -128 128 0 ) ( 128 128 0 ) ( 128 128 128 ) brick 0 0 0 1 1
+}
+}
+{
+"classname" "player_start"
+"origin" "0 0 64"
+"angle" "0"
+}
+{
+"classname" "light"
+"origin" "0 0 96"
+"color" "255 220 180"
+"intensity" "800"
+"radius" "512"
+}

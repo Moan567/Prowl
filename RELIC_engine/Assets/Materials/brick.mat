@@ -1,0 +1,6 @@
+# Relic material: brick
+diffuse brick.png
+normal brick_n.png
+specular brick_s.png
+roughness brick_r.png
+tint 1.0 1.0 1.0 1.0

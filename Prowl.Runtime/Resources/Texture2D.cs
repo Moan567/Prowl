@@ -1,0 +1,387 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.IO;
+
+using Prowl.Aperture;
+using Prowl.Echo;
+
+namespace Prowl.Runtime.Resources;
+
+
+/// <summary>
+/// A <see cref="Texture"/> whose image has two dimensions and support for multisampling.
+/// </summary>
+public sealed class Texture2D : Texture, ISerializable
+{
+    private uint _width;
+    private uint _height;
+
+    /// <summary>The width of this <see cref="Texture2D"/>.</summary>
+    public uint Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
+
+    /// <summary>The height of this <see cref="Texture2D"/>.</summary>
+    public uint Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
+
+    public Texture2D() : base(TextureType.Texture2D, TextureImageFormat.Color4b) { }
+
+    /// <summary>
+    /// Creates a <see cref="Texture2D"/> with the desired parameters but no image data.
+    /// </summary>
+    /// <param name="width">The width of the <see cref="Texture2D"/>.</param>
+    /// <param name="height">The height of the <see cref="Texture2D"/>.</param>
+    /// <param name="generateMipmaps">Whether to generate mipmaps for this <see cref="Texture2D"/>.</param>
+    /// <param name="imageFormat">The image format for this <see cref="Texture2D"/>.</param>
+    public Texture2D(uint width, uint height, bool generateMipmaps = false, TextureImageFormat imageFormat = TextureImageFormat.Color4b)
+        : base(TextureType.Texture2D, imageFormat)
+    {
+        RecreateImage(width, height); //This also binds the texture
+
+        if (generateMipmaps)
+            GenerateMipmaps();
+
+        Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
+        MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
+        MagFilter = DefaultMagFilter;
+    }
+
+    /// <summary>
+    /// Sets the data of an area of the <see cref="Texture2D"/>.
+    /// </summary>
+    /// <param name="ptr">The pointer from which the pixel data will be read.</param>
+    /// <param name="rectX">The X coordinate of the first pixel to write.</param>
+    /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
+    /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
+    /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
+    public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
+    {
+        EnsureNotDisposed();
+        ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
+
+        Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
+    }
+
+    /// <summary>
+    /// Sets the data of an area of the <see cref="Texture2D"/>.
+    /// </summary>
+    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
+    /// <param name="data">A <see cref="Memory{T}"/> containing the new pixel data.</param>
+    /// <param name="rectX">The X coordinate of the first pixel to write.</param>
+    /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
+    /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
+    /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
+    public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
+    {
+        EnsureNotDisposed();
+        ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
+        ValidateByteCapacity(data.Length * sizeof(T), (long)rectWidth * rectHeight * GetBytesPerPixel(ImageFormat), nameof(data));
+
+        fixed (void* ptr = data.Span)
+            Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
+    }
+
+    /// <summary>
+    /// Sets the data of the entire <see cref="Texture2D"/>.
+    /// </summary>
+    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
+    /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
+    public void SetData<T>(Memory<T> data) where T : unmanaged
+    {
+        EnsureNotDisposed();
+        SetData(data, 0, 0, Width, Height);
+    }
+
+    /// <summary>
+    /// Gets the data of the entire <see cref="Texture2D"/>.
+    /// </summary>
+    /// <param name="ptr">The pointer to which the pixel data will be written.</param>
+    public unsafe void GetDataPtr(void* ptr)
+    {
+        EnsureNotDisposed();
+        Graphics.GetTexImage(Handle, 0, ptr);
+    }
+
+    /// <summary>
+    /// Gets the data of the entire <see cref="Texture2D"/>.
+    /// </summary>
+    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
+    /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
+    public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
+    {
+        EnsureNotDisposed();
+        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
+
+        fixed (void* ptr = data.Span)
+            Graphics.GetTexImage(Handle, 0, ptr);
+    }
+
+    /// <summary>Bytes needed to hold this texture's full image, and so the size of a readback buffer.</summary>
+    public int GetSize()
+    {
+        EnsureNotDisposed();
+        return (int)Width * (int)Height * GetBytesPerPixel(ImageFormat);
+    }
+
+    /// <summary>
+    /// Sets the texture coordinate wrapping modes for when a texture is sampled outside the [0, 1] range.
+    /// </summary>
+    /// <param name="sWrapMode">The wrap mode for the S (or texture-X) coordinate.</param>
+    /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
+    public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode)
+    {
+        EnsureNotDisposed();
+        Graphics.SetWrapS(Handle, sWrapMode);
+        Graphics.SetWrapT(Handle, tWrapMode);
+        // One field tracks both axes (every caller passes the same mode for each). Without this the
+        // property keeps reporting the constructor's default, and Serialize writes that stale value.
+        WrapMode = sWrapMode;
+    }
+
+    /// <summary>
+    /// Enable hardware depth-comparison sampling on this (depth) texture, so a
+    /// <c>sampler2DShadow</c> uniform performs the depth test in fixed-function hardware.
+    /// Pair with LINEAR filtering for free 2x2 PCF.
+    /// </summary>
+    public void SetDepthCompareMode(bool enabled) { EnsureNotDisposed(); Graphics.SetTextureCompareMode(Handle, enabled); }
+
+    /// <summary>
+    /// Recreates this <see cref="Texture2D"/>'s image with a new size,
+    /// resizing the <see cref="Texture2D"/> but losing the image data.
+    /// </summary>
+    /// <param name="width">The new width for the <see cref="Texture2D"/>.</param>
+    /// <param name="height">The new height for the <see cref="Texture2D"/>.</param>
+    public unsafe void RecreateImage(uint width, uint height)
+    {
+        EnsureNotDisposed();
+        ValidateTextureSize(width, height);
+
+        Width = width;
+        Height = height;
+
+        Graphics.TexImage2D(Handle, 0, Width, Height, 0, (void*)0);
+    }
+
+    /// <summary>
+    /// Guards a buffer against what the driver will actually read or write. The element count alone says
+    /// nothing: the GPU transfers <see cref="Texture.GetBytesPerPixel"/> bytes per texel, so a byte buffer
+    /// sized one-per-texel for an RGBA texture is a quarter of what TexSubImage2D goes on to read.
+    /// </summary>
+    private void ValidateByteCapacity(long providedBytes, long requiredBytes, string paramName)
+    {
+        if (providedBytes < requiredBytes)
+            throw new ArgumentException(
+                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
+    }
+
+    private void ValidateTextureSize(uint width, uint height)
+    {
+        if (width <= 0 || width > Graphics.MaxTextureSize)
+            throw new ArgumentOutOfRangeException(nameof(width), width, nameof(width) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + "]");
+
+        if (height <= 0 || height > Graphics.MaxTextureSize)
+            throw new ArgumentOutOfRangeException(nameof(height), height, nameof(height) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + "]");
+    }
+
+    private void ValidateRectOperation(int rectX, int rectY, uint rectWidth, uint rectHeight)
+    {
+        if (rectX < 0 || rectX >= Width)
+            throw new ArgumentOutOfRangeException(nameof(rectX), rectX, nameof(rectX) + " must be in the range [0, " + nameof(Width) + ")");
+
+        if (rectY < 0 || rectY >= Height)
+            throw new ArgumentOutOfRangeException(nameof(rectY), rectY, nameof(rectY) + " must be in the range [0, " + nameof(Height) + ")");
+
+        if (rectWidth <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rectWidth), rectWidth, nameof(rectWidth) + " must be greater than 0");
+
+        if (rectHeight <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rectHeight), rectHeight, nameof(rectHeight) + "must be greater than 0");
+
+        if (rectWidth > Width - rectX || rectHeight > Height - rectY)
+            throw new ArgumentOutOfRangeException("Specified area is outside of the texture's storage");
+    }
+
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
+    {
+        SerializeHeader(compoundTag);
+        compoundTag.Add("Width", new(Width));
+        compoundTag.Add("Height", new(Height));
+        compoundTag.Add("IsMipMapped", new(IsMipmapped));
+        compoundTag.Add("ImageFormat", new((int)ImageFormat));
+        compoundTag.Add("MinFilter", new((int)MinFilter));
+        compoundTag.Add("MagFilter", new((int)MagFilter));
+        compoundTag.Add("Wrap", new((int)WrapMode));
+        byte[] data = new byte[GetSize()];
+        GetData<byte>(data);
+        compoundTag.Add("Data", new(data));
+    }
+
+    public void Deserialize(EchoObject value, SerializationContext ctx)
+    {
+        uint width = value["Width"].UIntValue;
+        uint height = value["Height"].UIntValue;
+        bool isMipMapped = value["IsMipMapped"].BoolValue;
+        var imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
+        var minFilter = (TextureMin)value["MinFilter"].IntValue;
+        var magFilter = (TextureMag)value["MagFilter"].IntValue;
+        var wrap = (TextureWrap)value["Wrap"].IntValue;
+
+        // Take on the stored format and size in place. The serializer already ran a constructor to make
+        // this instance, so running another one over it would leak that constructor's GPU handle.
+        AdoptImageFormat(imageFormat);
+        RecreateImage(width, height);
+
+        DeserializeHeader(value);
+
+        Memory<byte> data = value["Data"].ByteArrayValue;
+        SetData(data);
+
+        if (isMipMapped)
+            GenerateMipmaps();
+
+        SetTextureFilters(minFilter, magFilter);
+        SetWrapModes(wrap, wrap);
+    }
+
+    #region Image loading
+
+    /// <summary>Decodes into the layout and row order an upload wants, so no repacking follows.</summary>
+    private static DecodeOptions DecodeToUploadLayout => new()
+    {
+        // Tightly packed R,G,B,A, which is what Color4b and TexSubImage2D expect.
+        TargetPixelFormat = PixelFormat.Rgba8,
+        // The GPU's texture origin is the lower left, and writing rows in that order costs
+        // nothing here where flipping afterwards is a second pass over the whole image.
+        FlipVertically = true,
+        RowAlignment = 4,
+    };
+
+    /// <summary>
+    /// Creates a <see cref="Texture2D"/> from an already decoded image.
+    /// </summary>
+    /// <param name="image">The image to create the <see cref="Texture2D"/> with. Must be Rgba8.</param>
+    /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
+    public static Texture2D FromImage(Aperture.Image image, bool generateMipmaps = false)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+
+        if (image.PixelFormat != PixelFormat.Rgba8)
+            throw new ArgumentException(TextureFormatMustBeColor4bError, nameof(image));
+
+        ImageFrame frame = image.RootFrame;
+
+        Texture2D texture = new((uint)image.Width, (uint)image.Height, false, TextureImageFormat.Color4b);
+        try
+        {
+            unsafe
+            {
+                fixed (byte* pixels = frame.Pixels)
+                    Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, (uint)image.Width, (uint)image.Height, pixels);
+            }
+
+            if (generateMipmaps)
+                texture.GenerateMipmaps();
+
+            // Image-content textures default to linear filtering (the base Texture default is Nearest,
+            // which suits depth/data textures). Importer/user settings still override this afterward.
+            texture.SetTextureFilters(generateMipmaps ? TextureMin.LinearMipmapLinear : TextureMin.Linear, TextureMag.Linear);
+
+            return texture;
+        }
+        catch
+        {
+            texture.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Creates a <see cref="Texture2D"/> from a <see cref="Stream"/>.
+    /// </summary>
+    /// <param name="stream">The stream from which to load an image.</param>
+    /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
+    public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        using Aperture.Image image = Aperture.Image.Load(stream, DecodeToUploadLayout);
+        return FromImage(image, generateMipmaps);
+    }
+
+    /// <summary>
+    /// Creates a <see cref="Texture2D"/> by loading an image from a file.
+    /// </summary>
+    /// <param name="file">The file containing the image to create the <see cref="Texture2D"/> with.</param>
+    /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
+    public static Texture2D FromFile(string file, bool generateMipmaps = false)
+    {
+        using Aperture.Image image = Aperture.Image.Load(file, DecodeToUploadLayout);
+        return FromImage(image, generateMipmaps);
+    }
+
+    /// <summary>
+    /// Loads a texture from a file path (alias for FromFile for consistency)
+    /// </summary>
+    public static Texture2D LoadFromFile(string filePath, bool generateMipmaps = false)
+    {
+        Texture2D texture = FromFile(filePath, generateMipmaps);
+        texture.AssetPath = filePath;
+        return texture;
+    }
+
+    /// <summary>
+    /// Loads a texture from a stream (alias for FromStream for consistency)
+    /// </summary>
+    public static Texture2D LoadFromStream(Stream stream, bool generateMipmaps = false)
+    {
+        return FromStream(stream, generateMipmaps);
+    }
+
+    /// <summary>
+    /// Get the shared instance of a default embedded texture. Returns the same GPU
+    /// texture across the whole app callers that need a unique mutable copy should
+    /// call <see cref="FromImage"/>/<see cref="FromStream"/> directly.
+    /// </summary>
+    public static Texture2D LoadDefault(DefaultTexture texture)
+    {
+        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(texture)) is Texture2D cached)
+            return cached;
+        return ParseDefault(texture);
+    }
+
+    /// <summary>
+    /// Raw load of a default embedded texture invoked by <see cref="BuiltInAssets"/>
+    /// on first cache miss. Public callers should use <see cref="LoadDefault"/>.
+    /// </summary>
+    internal static Texture2D ParseDefault(DefaultTexture texture)
+    {
+        string fileName = texture switch
+        {
+            DefaultTexture.White => "default_white.png",
+            DefaultTexture.Gray18 => "default_gray18.png",
+            DefaultTexture.Normal => "default_normal.png",
+            DefaultTexture.Surface => "default_surface.png",
+            DefaultTexture.Emission => "default_emission.png",
+            DefaultTexture.Grid => "grid.png",
+            DefaultTexture.UIPanel => "UI_Panel.png",
+            DefaultTexture.Handle => "handle_ui.png",
+            DefaultTexture.Noise => "noise.png",
+            DefaultTexture.IconCamera => "icon_camera.png",
+            DefaultTexture.IconLight => "icon_light.png",
+            _ => throw new ArgumentException($"Unknown default texture: {texture}")
+        };
+
+        string resourcePath = $"Assets/Defaults/{fileName}";
+        using Stream stream = EmbeddedResources.GetStream(resourcePath);
+        return FromStream(stream, true);
+        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
+    }
+
+    internal const string ImageNotContiguousError = "To load/save an image, it's backing memory must be contiguous. Consider using smaller image sizes or changing your ImageSharp memory allocation settings to allow larger buffers.";
+
+    internal const string ImageSizeMustMatchTextureSizeError = "The size of the image must match the size of the texture";
+
+    internal const string TextureFormatMustBeColor4bError = "The texture's format must be Color4b (RGBA)";
+
+    #endregion
+}

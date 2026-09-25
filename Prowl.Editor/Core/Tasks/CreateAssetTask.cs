@@ -1,0 +1,175 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.IO;
+
+using Prowl.Echo;
+using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.Popups;
+using Prowl.Editor.Theming;
+using Prowl.Runtime;
+
+namespace Prowl.Editor.Core.Tasks;
+
+// TODO: This uses hardcoded asset types? Maybe we should rewrite Creating assets to be a more embedded feature into the Project panel? Rather then an EditorTask
+
+/// <summary> Provides asset creation operations for the Project panel, supporting assets, folders, scripts, and shaders. </summary>
+public class CreateAssetTask : EditorTask
+{
+
+    /// <summary> Specifies the type of asset to create. </summary>
+    public enum AssetType
+    {
+        Asset,
+        Folder,
+        Script,
+        Shader,
+    }
+
+    public AssetType TaskType = AssetType.Asset;
+
+    /// <summary> Starts a rename overlay for the specified content item, with optional callbacks for confirmation and cancellation. </summary>
+    public void StartRename(ContentItem item, bool inTree = false, Action<string>? onConfirm = null, Action? onCancel = null)
+    {
+        string id = inTree ? $"proj_folder_{item.RelativePath}" : $"proj_asset_{item.RelativePath}";
+        string editName = item.IsFolder ? item.Name : Path.GetFileNameWithoutExtension(item.Name);
+
+        RenameOverlay.Begin(id, editName, newText =>
+        {
+            string newName = newText;
+            if (onConfirm != null)
+                onConfirm(newName);
+        }, onCancel);
+    }
+
+    /// <summary> Begins the asset creation workflow: navigates to the target folder, shows a rename overlay, then creates the asset based on TaskType. </summary>
+    public async void BeginCreateTask(AssetMenuEntry entry, string relativeFolder)
+    {
+        var panel = ProjectPanel.Instance;
+        if (panel != null)
+        {
+            // The rename placeholder is drawn in the browsed folder, so show the target folder.
+            panel.NavigateTo(relativeFolder);
+
+            string newName = entry.Name;
+            string? renameResult = null;
+            bool finished = false;
+            var item = new ContentItem()
+            {
+                Name = newName,
+                Icon = TaskType switch
+                {
+                    AssetType.Asset => EditorRegistries.GetFileIconForExtension(".asset"),
+                    AssetType.Shader => EditorRegistries.GetFileIconForExtension(".shader"),
+                    AssetType.Folder => EditorIcons.Folder,
+                    _ => null
+                }
+            };
+            panel.VirtualContentItems.Add(item);
+
+            StartRename(item, false, (n) =>
+            {
+                renameResult = n;
+                finished = true;
+            },
+            () => finished = true);
+
+            await IdleOnCondition(() => finished);
+
+            if (!string.IsNullOrEmpty(renameResult))
+            {
+                var path = TaskType switch
+                {
+                    AssetType.Asset => CreateAsset(entry, relativeFolder, renameResult),
+                    AssetType.Shader => CreateShader(renameResult, relativeFolder),
+                    AssetType.Folder => CreateFolder(renameResult, relativeFolder),
+                    _ => null
+                };
+            }
+
+            panel.VirtualContentItems.Remove(item);
+        }
+    }
+
+    /// <summary> Creates a shader file from the embedded template and returns its relative path, or null on failure. </summary>
+    public static string? CreateShader(string shaderName, string relativeFolder)
+    {
+        string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        string name = AssetCreateMenu.FindUniqueName(absFolder, shaderName, ".shader");
+        string filePath = Path.Combine(absFolder, name);
+
+        var stream = EditorApplication.GetEmbeddedResource("NewShader.template");
+        if (stream == null)
+        {
+            Debug.LogError("Failed to create shader: embedded resource 'NewShader.template' is missing.");
+            return null;
+        }
+
+        try
+        {
+            using (StreamReader reader = new StreamReader(stream))
+            {
+                File.WriteAllText(filePath, reader.ReadToEnd().Replace("{[shaderName]}", shaderName));
+            }
+
+            EditorAssetBackend.Instance?.InvalidateFolderIndex();
+            Debug.Log($"Created shader: {name}");
+            return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to create shader '{shaderName}': {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary> Creates a folder on disk with a meta file and returns its relative path, or null if the parent folder does not exist. </summary>
+    public static string? CreateFolder(string folderName, string relativeFolder)
+    {
+        string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        string name = AssetCreateMenu.FindUniqueName(absFolder, folderName, "");
+        string newPath = Path.Combine(absFolder, name);
+        Directory.CreateDirectory(newPath);
+        MetaFile.EnsureMeta(newPath, "DefaultImporter");
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
+        Debug.Log($"Created folder: {name}");
+        string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        return relPath;
+    }
+
+    /// <summary>
+    /// Create an asset file on disk for the given registry entry.
+    /// Returns the relative path on success, null on failure.
+    /// </summary>
+    private static string? CreateAsset(AssetMenuEntry entry, string relativeFolder, string? filename = null)
+    {
+        string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        string name = AssetCreateMenu.FindUniqueName(absFolder, filename ?? $"New {entry.Name}", entry.Extension);
+        string filePath = Path.Combine(absFolder, name);
+
+        try
+        {
+            var instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
+            var echo = Serializer.Serialize(typeof(object), instance);
+            if (echo == null) return null;
+            File.WriteAllText(filePath, echo.WriteToString());
+
+            EditorAssetBackend.Instance?.InvalidateFolderIndex();
+            Debug.Log($"Created {entry.Name}: {name}");
+            return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to create {entry.Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+}

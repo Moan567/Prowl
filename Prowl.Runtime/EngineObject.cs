@@ -1,0 +1,203 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
+using System.Threading;
+
+using Prowl.Echo;
+using Prowl.Echo.Cloning;
+
+namespace Prowl.Runtime;
+
+/// <summary>
+/// Engine objects are shared rather than duplicated when a clone reaches one through a field. An
+/// asset referenced by two components stays one asset. Cloning an engine object directly still copies
+/// it, and <see cref="GameObject"/> claims its own components and children explicitly.
+/// </summary>
+[CloneBehavior(CloneBehavior.Reference)]
+public abstract class EngineObject : IDisposable
+{
+    private static int s_nextID = 1;
+
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
+    protected int _instanceID;
+    public int InstanceID => _instanceID;
+
+    // Asset path if we have one
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
+    [HideInInspector] public string AssetPath = string.Empty;
+
+    /// <summary>
+    /// A unique asset identifier. When set, serialization will store only a reference
+    /// and deserialization will resolve the object from the <see cref="AssetDatabase"/>.
+    /// </summary>
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
+    [HideInInspector] public Guid AssetID = Guid.Empty;
+
+    [HideInInspector] public string Name;
+
+    // Interlocked-guarded rather than a plain bool: a finalizer can now race an explicit Dispose()
+    // call from another thread (the finalizer thread runs independently of everything else), so the
+    // check-and-set must be atomic or both could pass the guard and double-run OnDispose.
+    [CloneField(CloneFieldFlags.Skip)]
+    private int _disposed;
+    public bool IsDisposed => _disposed != 0;
+
+    public EngineObject() : this(null) { }
+
+    public EngineObject(string? name = "New Object")
+    {
+        _instanceID = Interlocked.Increment(ref s_nextID);
+        Name = "New" + GetType().Name;
+        CreatedInstance();
+        Name = name ?? Name;
+    }
+
+    public virtual void CreatedInstance() { }
+
+    public virtual void OnValidate() { }
+
+    public void Dispose()
+    {
+        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
+            return;
+
+        // Explicit disposal means a finalizer (if this type has one) has nothing left to do.
+        GC.SuppressFinalize(this);
+        OnDispose();
+    }
+
+    private static readonly List<EngineObject> s_destroyQueue = [];
+
+    /// <summary>
+    /// Queues this object to be disposed at the end of the frame, once every callback has finished.
+    /// It stays fully usable until then, so anything still holding it this frame keeps working, and
+    /// teardown never lands in the middle of an Update, a render or a physics callback.
+    /// <para/>
+    /// A destroyed GameObject still ticks and still collides for the rest of the frame. Set
+    /// <c>Enabled = false</c> alongside this if that matters, or call <see cref="Dispose"/> to tear
+    /// down right now and deal with the consequences.
+    /// </summary>
+    public void Destroy()
+    {
+        if (IsDisposed) return;
+        lock (s_destroyQueue) s_destroyQueue.Add(this);
+    }
+
+    /// <summary>
+    /// Disposes everything <see cref="Destroy"/> queued. Driven once per frame by the game loop,
+    /// after rendering. Anything queued while this runs waits for the next frame.
+    /// </summary>
+    public static void ProcessDestroyed()
+    {
+        EngineObject[] queued;
+        lock (s_destroyQueue)
+        {
+            if (s_destroyQueue.Count == 0) return;
+            queued = [.. s_destroyQueue];
+            s_destroyQueue.Clear();
+        }
+
+        foreach (EngineObject obj in queued)
+        {
+            if (obj.IsDisposed) continue; // disposed by hand, or by an owner that went first
+
+            try { obj.Dispose(); }
+            catch (Exception ex) { Debug.LogError($"[{obj.Name}/{obj.GetType().Name}] Dispose() threw while being destroyed: {ex.Message}\n{ex.StackTrace}"); }
+        }
+    }
+
+
+    public static bool operator ==(EngineObject left, EngineObject right)
+    {
+        return ReferenceEquals(left, right);
+    }
+    public static bool operator !=(EngineObject left, EngineObject right) => !(left == right);
+    public override bool Equals(object? obj) => this == (obj as EngineObject);
+    public override int GetHashCode() => _instanceID;
+
+    protected virtual void OnDispose() { }
+
+    /// <summary>
+    /// Call at the top of any accessor a caller might reasonably use every frame (a texture's Width,
+    /// a mesh's VertexCount, ...). Throws loudly if this object was already disposed - the intended
+    /// signal for "you're holding a raw reference the asset system didn't know was still in use."
+    /// Otherwise touches this object's AssetID as activity, so a raw (non-AssetRef) reference that IS
+    /// being read regularly still counts as in-use and won't be idle-swept out from under it - only
+    /// an asset nobody reads at all, via any path, goes idle.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected void EnsureNotDisposed(
+        [System.Runtime.CompilerServices.CallerMemberName] string? member = null)
+    {
+        if (IsDisposed)
+            ThrowDisposed(member);
+
+        TouchAsset();
+    }
+
+    // Kept out of line so EnsureNotDisposed stays small enough for the JIT to inline into the
+    // hundreds of property getters that call it.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowDisposed(string? member)
+        => throw new ObjectDisposedException(Name,
+            $"'{Name}' ({GetType().Name}) was already disposed when '{member}' was accessed. " +
+            "If this asset should stay loaded, hold it via AssetRef<T> (read .Res, or call " +
+            ".Touch()) instead of a raw field, or use AssetDatabase.LockToScene/LockPermanent " +
+            "for something that must survive being unused for a while.");
+
+    private long _lastTouchTick;
+
+    // Reading one property a thousand times in a frame says nothing more about liveness than
+    // reading it once, so activity is reported at most this often per object. Three orders of
+    // magnitude finer than the idle timeout it feeds, so eviction behaviour is unchanged.
+    private const long TouchIntervalMs = 1000;
+
+    /// <summary>Report this object as in use, so the idle sweep won't evict it. Cheap enough to call
+    /// from any accessor - repeat calls within a second are dropped without reaching the database.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void TouchAsset()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastTouchTick >= TouchIntervalMs)
+            TouchAssetSlow(now);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void TouchAssetSlow(long now)
+    {
+        _lastTouchTick = now;
+        if (AssetID != Guid.Empty)
+            AssetDatabase.Touch(AssetID);
+    }
+
+    public override string ToString() => Name;
+
+    protected void SerializeHeader(EchoObject compound)
+    {
+        compound.Add("Name", new(Name));
+        compound.Add("AssetPath", new(AssetPath));
+        if (AssetID != Guid.Empty)
+            compound.Add("AssetID", new(AssetID.ToString()));
+    }
+
+    protected void DeserializeHeader(EchoObject value)
+    {
+        Name = value.Get("Name")?.StringValue ?? Name;
+        AssetPath = value.Get("AssetPath")?.StringValue ?? string.Empty;
+        if (Guid.TryParse(value.Get("AssetID")?.StringValue, out Guid assetId))
+            AssetID = assetId;
+    }
+}
+
+public static class EngineObjectExtensions
+{
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsNotValid([NotNullWhen(false)] this EngineObject? obj) => obj is null || obj.IsDisposed;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsValid([NotNullWhen(true)] this EngineObject? obj) => obj is not null && !obj.IsDisposed;
+}

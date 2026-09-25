@@ -1,0 +1,6 @@
+# Relic material: concrete
+diffuse city4_1.png
+normal concrete_n.png
+specular concrete_s.png
+roughness concrete_r.png
+tint 0.9 0.9 0.9 1.0

@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="Relic.Framework/Relic.Framework.csproj" />
+  <Project Path="Relic.Content/Relic.Content.csproj" />
+  <Project Path="Relic.Physics/Relic.Physics.csproj" />
+  <Project Path="Relic.Runtime/Relic.Runtime.csproj" />
+  <Project Path="Relic.Renderer/Relic.Renderer.csproj" />
+  <Project Path="Relic.Renderer.OpenGL/Relic.Renderer.OpenGL.csproj" />
+  <Project Path="Relic.Windowing/Relic.Windowing.csproj" />
+  <Project Path="Relic.Gameplay/Relic.Gameplay.csproj" />
+  <Project Path="Relic.Tests/Relic.Tests.csproj" />
+  <Project Path="Relic/Relic.csproj" />
+</Solution>

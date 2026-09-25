@@ -1,0 +1,256 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+
+using Prowl.Echo;
+using Prowl.Runtime.Audio;
+
+namespace Prowl.Runtime;
+
+/// <summary>
+/// Loads and applies project settings from Echo YAML files in the built player.
+/// Reads from Content/Settings/ folder and applies physics, audio, time, and tags/layers.
+/// </summary>
+public static class PlayerSettingsLoader
+{
+    private static string? _settingsDir;
+
+    /// <summary>Apply all project settings and register for scene load events.</summary>
+    public static void Apply(string settingsDir)
+    {
+        _settingsDir = settingsDir;
+
+        if (!Directory.Exists(settingsDir))
+        {
+            Debug.LogWarning($"[PlayerSettings] Settings directory not found: {settingsDir}");
+            return;
+        }
+
+        ApplyAssetConfig(settingsDir);
+        ApplyAudio(settingsDir);
+        ApplyTime(settingsDir);
+        ApplyTagsAndLayers(settingsDir);
+
+        // Physics needs to apply to each new scene's PhysicsWorld
+        ApplyPhysics(settingsDir);
+
+        // Re-apply physics whenever a new scene loads
+        Resources.Scene.OnSceneLoaded += () =>
+        {
+            if (_settingsDir != null)
+                ApplyPhysics(_settingsDir);
+        };
+    }
+
+    /// <summary>
+    /// Apply the async-asset-loading toggle. Exposed separately so the player can set it
+    /// BEFORE the default scene loads (component OnEnable may resolve AssetRefs), not just
+    /// during the bulk <see cref="Apply"/> that runs after scene load.
+    /// </summary>
+    public static void ApplyAssetConfig(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.Assets);
+        if (settings == null) return;
+
+        try
+        {
+            // Default ON if the key is absent.
+            bool async = !settings.TryGet("AsyncAssetLoading", out var a) || a!.BoolValue;
+            AssetLoadingConfig.AsyncEnabled = async;
+            Debug.Log($"[PlayerSettings] Async asset loading: {async}.");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply asset config: {ex.Message}"); }
+    }
+
+    private static void ApplyPhysics(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.Physics);
+        if (settings == null) return;
+
+        try
+        {
+            float gx = settings.TryGet("GravityX", out var gxp) ? gxp!.FloatValue : 0;
+            float gy = settings.TryGet("GravityY", out var gyp) ? gyp!.FloatValue : -9.81f;
+            float gz = settings.TryGet("GravityZ", out var gzp) ? gzp!.FloatValue : 0;
+            int solverIter = settings.TryGet("SolverIterations", out var si) ? si!.IntValue : 8;
+            int relaxIter = settings.TryGet("RelaxIterations", out var ri) ? ri!.IntValue : 4;
+            int subSteps = settings.TryGet("SubSteps", out var ss) ? ss!.IntValue : 2;
+            bool sleep = !settings.TryGet("AllowSleep", out var sl) || sl!.BoolValue;
+            bool mt = !settings.TryGet("UseMultithreading", out var mtp) || mtp!.BoolValue;
+            bool sync = !settings.TryGet("AutoSyncTransforms", out var st) || st!.BoolValue;
+
+            // Advanced settings
+            bool determ = settings.TryGet("EnhancedDeterminism", out var dt) && dt!.BoolValue;
+            bool persistThreads = settings.TryGet("ThreadModel", out var tmp)
+                && tmp!.IntValue == (int)PhysicsThreadModel.Persistent;
+            bool auxcp = !settings.TryGet("EnableAuxiliaryContactPoints", out var ax) || ax!.BoolValue;
+            bool persistManifold = !settings.TryGet("PersistentContactManifold", out var pm) || pm!.BoolValue;
+            float specRelax = settings.TryGet("SpeculativeRelaxationFactor", out var sr) ? sr!.FloatValue : 0.9f;
+
+            var scene = Resources.Scene.Current;
+            if (scene != null)
+            {
+                scene.Physics.Gravity = new Vector.Float3(gx, gy, gz);
+                scene.Physics.SolverIterations = solverIter;
+                scene.Physics.RelaxIterations = relaxIter;
+                scene.Physics.Substep = subSteps;
+                scene.Physics.AllowSleep = sleep;
+                scene.Physics.UseMultithreading = mt;
+                scene.Physics.AutoSyncTransforms = sync;
+                scene.Physics.EnhancedDeterminism = determ;
+                scene.Physics.ThreadModel = persistThreads ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular;
+                scene.Physics.EnableAuxiliaryContactPoints = auxcp;
+                scene.Physics.PersistentContactManifold = persistManifold;
+                scene.Physics.SpeculativeRelaxationFactor = specRelax;
+            }
+
+            // Collision matrix (uint[] serializes as a compound holding an "array" list)
+            if (settings.TryGet("CollisionMatrixRows", out var cmProp) && cmProp!.TryGet("array", out var rows)
+                && rows!.TagType == EchoType.List)
+            {
+                var packed = new uint[CollisionMatrix.LayerCount];
+                int i = 0;
+                foreach (var row in rows.List)
+                {
+                    if (i >= packed.Length) break;
+                    packed[i++] = row.UIntValue;
+                }
+
+                CollisionMatrix.SetRows(packed);
+            }
+
+            Debug.Log("[PlayerSettings] Physics applied.");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply physics: {ex.Message}"); }
+    }
+
+    private static void ApplyAudio(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.Audio);
+        if (settings == null) return;
+
+        try
+        {
+            float vol = settings.TryGet("GlobalVolume", out var v) ? v!.FloatValue : 1f;
+            AudioContext.MasterVolume = vol;
+
+            // Reopens the device only if the project asked for a format other than the one the game
+            // loop opened it with.
+            int rate = settings.TryGet("SampleRate", out var r) ? r!.IntValue : AudioContext.SampleRate;
+            int channels = settings.TryGet("Channels", out var c) ? c!.IntValue : AudioContext.Channels;
+            int buffer = settings.TryGet("BufferSize", out var b) ? b!.IntValue : AudioContext.PeriodSizeInFrames;
+
+            if (rate > 0 && channels > 0 && buffer > 0)
+                AudioContext.Restart((uint)rate, (uint)channels, (uint)buffer);
+
+            Debug.Log("[PlayerSettings] Audio applied.");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply audio: {ex.Message}"); }
+    }
+
+    private static void ApplyTime(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.Time);
+        if (settings == null) return;
+
+        try
+        {
+            float fixedDt = settings.TryGet("FixedTimestep", out var ft) ? ft!.FloatValue : 1f / 60f;
+            float timeScale = settings.TryGet("DefaultTimeScale", out var ts) ? ts!.FloatValue : 1f;
+            int maxIter = settings.TryGet("MaxFixedIterations", out var mi) ? mi!.IntValue : 3;
+
+            Time.FixedDeltaTime = fixedDt;
+            Time.TimeScale = timeScale;
+            Time.MaxFixedIterations = maxIter;
+            Debug.Log("[PlayerSettings] Time applied.");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply time: {ex.Message}"); }
+    }
+
+    private static void ApplyTagsAndLayers(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.TagsAndLayers);
+        if (settings == null) return;
+
+        try
+        {
+            // Tags is a List<string> (serializes as a list directly).
+            if (settings.TryGet("Tags", out var tagsProp) && tagsProp!.TagType == EchoType.List)
+            {
+                TagLayerManager.tags.Clear();
+                foreach (var tag in tagsProp.List)
+                    TagLayerManager.tags.Add(tag.StringValue);
+            }
+
+            // Layers is a string[] (serializes as a compound holding an "array" list).
+            if (settings.TryGet("Layers", out var layersProp) && layersProp!.TryGet("array", out var layers)
+                && layers!.TagType == EchoType.List)
+            {
+                int i = 0;
+                foreach (var layer in layers.List)
+                {
+                    if (i >= TagLayerManager.layers.Length) break;
+                    TagLayerManager.layers[i++] = layer.StringValue;
+                }
+            }
+
+            Debug.Log("[PlayerSettings] Tags & Layers applied.");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Apply the navigation tables and world settings. Exposed separately so the player can run it
+    /// BEFORE the default scene loads: a navmesh world reads its obstacle capacity and crowd radius
+    /// when its surfaces and agents register, which happens during the load.
+    /// </summary>
+    public static void ApplyNavigation(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.Navigation);
+        if (settings == null) return;
+
+        try
+        {
+            List<string>? names = settings.TryGet("AreaNames", out var namesProp) ? Serializer.Deserialize<List<string>>(namesProp) : null;
+            List<float>? costs = settings.TryGet("AreaCosts", out var costsProp) ? Serializer.Deserialize<List<float>>(costsProp) : null;
+            if (names?.Count > 0 || costs?.Count > 0)
+            {
+                NavMeshAreas.ApplyTable(names ?? [], costs ?? []);
+                Debug.Log("[PlayerSettings] Navigation areas applied.");
+            }
+
+            if (settings.TryGet("AgentTypes", out var typesProp)
+                && Serializer.Deserialize<List<NavMeshAgentType>>(typesProp) is { Count: > 0 } types)
+            {
+                NavMeshAgentTypes.ApplyTable(types);
+                Debug.Log($"[PlayerSettings] Navigation agent types applied ({types.Count}).");
+            }
+
+            if (settings.TryGet("World", out var worldProp)
+                && Serializer.Deserialize<NavMeshWorldSettings>(worldProp) is { } world)
+                NavMeshWorld.ApplyProjectSettings(world);
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply navigation settings: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Reads one settings file, or null when there is nothing usable to read. A file that exists but
+    /// cannot be parsed is reported, since falling back to defaults silently is how a shipped game ends
+    /// up running with physics nobody configured.
+    /// </summary>
+    private static EchoObject? Read(string dir, string name)
+    {
+        string path = Path.Combine(dir, $"{name}.yaml");
+        if (!File.Exists(path)) return null;
+
+        try
+        {
+            return EchoObject.ReadFromYaml(File.ReadAllText(path));
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[PlayerSettings] Could not read '{name}.yaml', using defaults: {ex.Message}");
+            return null;
+        }
+    }
+}

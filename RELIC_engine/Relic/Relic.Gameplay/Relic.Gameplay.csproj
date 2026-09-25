@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Relic.Framework\Relic.Framework.csproj" />
+    <ProjectReference Include="..\Relic.Content\Relic.Content.csproj" />
+    <ProjectReference Include="..\Relic.Physics\Relic.Physics.csproj" />
+    <ProjectReference Include="..\Relic.Renderer\Relic.Renderer.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

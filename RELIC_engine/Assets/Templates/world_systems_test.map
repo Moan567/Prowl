@@ -1,0 +1,430 @@
+﻿// Relic official test room — built from separate solid brushes (floor, ceiling, 4 walls)
+// A brush is always solid. A single cube is a solid cube, not a room.
+{
+"classname" "worldspawn"
+// Floor 512x512x16 at Z 0
+{
+( -256 -256 0 ) ( 256 -256 0 ) ( 256 256 0 ) brick 0 0 0 1 1
+( -256 -256 16 ) ( 256 256 16 ) ( 256 -256 16 ) brick 0 0 0 1 1
+( -256 -256 0 ) ( -256 -256 16 ) ( 256 -256 16 ) brick 0 0 0 1 1
+( 256 256 0 ) ( 256 256 16 ) ( -256 256 16 ) brick 0 0 0 1 1
+( -256 -256 0 ) ( -256 256 0 ) ( -256 256 16 ) brick 0 0 0 1 1
+( 256 -256 0 ) ( 256 256 16 ) ( 256 256 0 ) brick 0 0 0 1 1
+}
+// Ceiling 512x512x16 at Z 128
+{
+( -256 -256 128 ) ( 256 -256 128 ) ( 256 256 128 ) brick 0 0 0 1 1
+( -256 -256 144 ) ( 256 256 144 ) ( 256 -256 144 ) brick 0 0 0 1 1
+( -256 -256 128 ) ( -256 -256 144 ) ( 256 -256 144 ) brick 0 0 0 1 1
+( 256 256 128 ) ( 256 256 144 ) ( -256 256 144 ) brick 0 0 0 1 1
+( -256 -256 128 ) ( -256 256 128 ) ( -256 256 144 ) brick 0 0 0 1 1
+( 256 -256 128 ) ( 256 256 144 ) ( 256 256 128 ) brick 0 0 0 1 1
+}
+// Wall -X
+{
+( -256 -256 0 ) ( -256 -256 144 ) ( -256 256 144 ) brick 0 0 0 1 1
+( -240 -256 0 ) ( -240 256 0 ) ( -240 256 144 ) brick 0 0 0 1 1
+( -256 -256 0 ) ( -240 -256 0 ) ( -240 -256 144 ) brick 0 0 0 1 1
+( -256 256 0 ) ( -240 256 144 ) ( -240 256 0 ) brick 0 0 0 1 1
+( -256 -256 0 ) ( -256 256 0 ) ( -240 256 0 ) brick 0 0 0 1 1
+( -256 -256 144 ) ( -240 -256 144 ) ( -240 256 144 ) brick 0 0 0 1 1
+}
+// Wall +X
+{
+( 240 -256 0 ) ( 240 -256 144 ) ( 240 256 144 ) brick 0 0 0 1 1
+( 256 -256 0 ) ( 256 256 0 ) ( 256 256 144 ) brick 0 0 0 1 1
+( 240 -256 0 ) ( 256 -256 0 ) ( 256 -256 144 ) brick 0 0 0 1 1
+( 240 256 0 ) ( 256 256 144 ) ( 256 256 0 ) brick 0 0 0 1 1
+( 240 -256 0 ) ( 240 256 0 ) ( 256 256 0 ) brick 0 0 0 1 1
+( 240 -256 144 ) ( 256 -256 144 ) ( 256 256 144 ) brick 0 0 0 1 1
+}
+// Wall -Y
+{
+( -256 -256 0 ) ( 256 -256 0 ) ( 256 -256 144 ) brick 0 0 0 1 1
+( -256 -240 0 ) ( 256 -240 144 ) ( 256 -240 0 ) brick 0 0 0 1 1
+( -256 -256 0 ) ( -256 -256 144 ) ( 256 -256 144 ) brick 0 0 0 1 1
+( -256 -240 0 ) ( 256 -240 0 ) ( -256 -256 0 ) brick 0 0 0 1 1
+( -256 -256 0 ) ( -256 -240 0 ) ( -256 -240 144 ) brick 0 0 0 1 1
+( 256 -256 0 ) ( 256 -240 144 ) ( 256 -240 0 ) brick 0 0 0 1 1
+}
+// Wall +Y
+{
+( -256 240 0 ) ( 256 240 0 ) ( 256 240 144 ) brick 0 0 0 1 1
+( -256 256 0 ) ( 256 256 144 ) ( 256 256 0 ) brick 0 0 0 1 1
+( -256 240 0 ) ( -256 240 144 ) ( 256 240 144 ) brick 0 0 0 1 1
+( -256 256 0 ) ( 256 256 0 ) ( -256 240 0 ) brick 0 0 0 1 1
+( -256 240 0 ) ( -256 256 0 ) ( -256 256 144 ) brick 0 0 0 1 1
+( 256 240 0 ) ( 256 256 144 ) ( 256 240 144 ) brick 0 0 0 1 1
+}
+// Step 32x64x16 at (64,0,0) for stairs test
+{
+( 32 -32 0 ) ( 96 -32 0 ) ( 96 32 0 ) brick 0 0 0 1 1
+( 32 -32 16 ) ( 96 32 16 ) ( 96 -32 16 ) brick 0 0 0 1 1
+( 32 -32 0 ) ( 32 -32 16 ) ( 96 -32 16 ) brick 0 0 0 1 1
+( 96 32 0 ) ( 96 32 16 ) ( 32 32 16 ) brick 0 0 0 1 1
+( 32 -32 0 ) ( 32 32 0 ) ( 32 32 16 ) brick 0 0 0 1 1
+( 96 -32 0 ) ( 96 32 16 ) ( 96 32 0 ) brick 0 0 0 1 1
+}
+}
+{
+"classname" "player_start"
+"origin" "0 0 32"
+"angle" "0"
+}
+{
+"classname" "enemy_dog"
+"origin" "-128 -128 32"
+"angle" "0"
+"health" "50"
+"patrol" "pc1"
+}
+{
+"classname" "enemy_soldier"
+"origin" "128 -128 32"
+"angle" "0"
+"health" "100"
+"weapon" "rifle"
+}
+{
+"classname" "enemy_demon"
+"origin" "0 160 32"
+"angle" "270"
+"health" "300"
+}
+{
+"classname" "weapon_pickup"
+"origin" "64 64 16"
+"weapon" "Shotgun"
+}
+{
+"classname" "health_pickup"
+"origin" "-64 64 16"
+"heal" "25"
+}
+{
+"classname" "prop_static"
+"origin" "0 64 16"
+"model" "crate.obj"
+"angle" "45"
+}
+{
+"classname" "light"
+"origin" "0 0 96"
+"intensity" "800"
+"radius" "512"
+"color" "255 220 180"
+}
+{
+"classname" "light_spot"
+"origin" "0 0 256"
+"angles" "-45 0 0"
+"intensity" "1200"
+"radius" "1024"
+}
+{
+"classname" "light_sun"
+"angles" "-45 45 0"
+"intensity" "2.5"
+}
+{
+"classname" "env_fog"
+"origin" "0 0 64"
+"color" "120 140 180"
+"density" "0.002"
+}
+{
+"classname" "env_postprocess"
+"origin" "0 0 32"
+"bloom" "1"
+"exposure" "1.1"
+}
+{
+"classname" "ambient_sound"
+"origin" "-160 -160 64"
+"sound" "forest_wind.wav"
+"volume" "0.8"
+"radius" "512"
+"loop" "1"
+}
+{
+"classname" "sound_emitter"
+"origin" "160 -160 64"
+"sound" "alarm.wav"
+"interval" "5"
+}
+{
+"classname" "sound_zone"
+"origin" "0 -160 32"
+"sound" "cave.wav"
+"radius" "256"
+}
+{
+"classname" "music_player"
+"origin" "0 0 200"
+"track" "main_theme.wav"
+"volume" "0.8"
+"loop" "1"
+}
+{
+"classname" "music_trigger"
+"origin" "80 0 32"
+"track" "battle.wav"
+"targetname" "mus_trig1"
+}
+{
+"classname" "reverb_zone"
+"origin" "-80 0 32"
+"radius" "256"
+"amount" "0.6"
+}
+{
+"classname" "trigger_multiple"
+"origin" "40 0 32"
+"target" "door1"
+"targetname" "trig1"
+}
+{
+"classname" "trigger_once"
+"origin" "64 0 16"
+"target" "secret_door"
+"targetname" "trigger1"
+}
+{
+"classname" "trigger_hurt"
+"origin" "-40 0 32"
+"damage" "10"
+"interval" "1.0"
+}
+{
+"classname" "trigger_heal"
+"origin" "-64 -64 32"
+"amount" "25"
+}
+{
+"classname" "trigger_push"
+"origin" "0 40 32"
+"force" "300"
+"direction" "1 0 0"
+}
+{
+"classname" "path_corner"
+"origin" "200 200 32"
+"targetname" "tele_dest"
+}
+{
+"classname" "trigger_teleport"
+"origin" "96 0 32"
+"target" "tele_dest"
+}
+{
+"classname" "trigger_sound"
+"origin" "120 0 32"
+"sound" "bell.wav"
+}
+{
+"classname" "trigger_music"
+"origin" "140 0 32"
+"track" "battle.wav"
+}
+{
+"classname" "func_door"
+"origin" "160 0 48"
+"targetname" "door1"
+"speed" "100"
+"wait" "3"
+{
+( 96 -32 16 ) ( 160 32 16 ) ( 160 -32 16 ) brick 0 0 0 1 1
+( 96 -32 80 ) ( 96 32 80 ) ( 160 32 80 ) brick 0 0 0 1 1
+( 96 -32 16 ) ( 96 -32 80 ) ( 96 32 16 ) brick 0 0 0 1 1
+( 160 32 16 ) ( 160 32 80 ) ( 160 -32 16 ) brick 0 0 0 1 1
+( 96 -32 16 ) ( 96 32 16 ) ( 160 -32 16 ) brick 0 0 0 1 1
+( 160 32 16 ) ( 160 -32 16 ) ( 160 32 80 ) brick 0 0 0 1 1
+}
+}
+{
+"classname" "func_door_rotating"
+"origin" "160 64 48"
+}
+{
+"classname" "func_button"
+"origin" "-160 64 48"
+"target" "door1"
+}
+{
+"classname" "func_elevator"
+"origin" "0 -160 32"
+{
+( -32 -192 16 ) ( 32 -128 16 ) ( 32 -192 16 ) brick 0 0 0 1 1
+( -32 -192 48 ) ( -32 -128 48 ) ( 32 -128 48 ) brick 0 0 0 1 1
+( -32 -192 16 ) ( -32 -192 48 ) ( -32 -128 16 ) brick 0 0 0 1 1
+( 32 -128 16 ) ( 32 -128 48 ) ( 32 -192 16 ) brick 0 0 0 1 1
+( -32 -192 16 ) ( -32 -128 16 ) ( 32 -192 16 ) brick 0 0 0 1 1
+( 32 -128 16 ) ( 32 -192 16 ) ( 32 -128 48 ) brick 0 0 0 1 1
+}
+}
+{
+"classname" "func_platform"
+"origin" "64 -160 32"
+}
+{
+"classname" "func_train"
+"origin" "-64 -160 32"
+}
+{
+"classname" "logic_timer"
+"origin" "0 120 64"
+"interval" "5"
+}
+{
+"classname" "logic_random"
+"origin" "32 120 64"
+"options" "3"
+"seed" "42"
+}
+{
+"classname" "logic_relay"
+"origin" "64 120 64"
+"target" "door1"
+"targetname" "relay1"
+}
+{
+"classname" "logic_counter"
+"origin" "-32 120 64"
+"count" "3"
+}
+{
+"classname" "logic_compare"
+"origin" "96 120 64"
+"a" "5"
+"b" "10"
+"op" "<"
+}
+{
+"classname" "path_corner"
+"origin" "-64 -128 32"
+"targetname" "pc1"
+"target" "pc2"
+}
+{
+"classname" "path_corner"
+"origin" "64 -128 32"
+"targetname" "pc2"
+"target" "pc1"
+}
+{
+"classname" "path_patrol"
+"origin" "0 -128 32"
+"speed" "120"
+"loop" "1"
+}
+{
+"classname" "info_enemy_spawn"
+"origin" "192 128 32"
+"enemy" "enemy_dog"
+"count" "2"
+}
+{
+"classname" "env_particles"
+"origin" "0 64 64"
+"effect" "smoke"
+"spawnrate" "10"
+"lifetime" "1.0"
+"velocity" "0 0 32"
+"size" "4"
+"color" "255 255 255"
+}
+{
+"classname" "fx_smoke"
+"origin" "32 64 64"
+}
+{
+"classname" "fx_fire"
+"origin" "64 64 64"
+}
+{
+"classname" "fx_sparks"
+"origin" "96 64 64"
+}
+{
+"classname" "fx_blood"
+"origin" "128 64 64"
+}
+{
+"classname" "fx_explosion"
+"origin" "160 64 64"
+}
+{
+"classname" "fx_muzzleflash"
+"origin" "192 64 64"
+}
+{
+"classname" "env_rain"
+"origin" "0 0 200"
+"density" "0.5"
+}
+{
+"classname" "env_snow"
+"origin" "64 0 200"
+}
+{
+"classname" "env_lightning"
+"origin" "-64 0 200"
+}
+{
+"classname" "env_wind"
+"origin" "0 64 200"
+"direction" "1 0 0"
+}
+{
+"classname" "env_skybox"
+"origin" "0 0 250"
+"skybox" "sky_day"
+}
+{
+"classname" "env_ambient"
+"origin" "0 -64 200"
+}
+{
+"classname" "ammo_pickup"
+"origin" "96 96 16"
+"ammo_type" "shotgun"
+"amount" "10"
+}
+{
+"classname" "armor_pickup"
+"origin" "128 96 16"
+"amount" "50"
+}
+{
+"classname" "keycard_pickup"
+"origin" "160 96 16"
+"key" "red"
+}
+{
+"classname" "weapon_spawn"
+"origin" "192 96 16"
+"weapon" "Shotgun"
+"respawn" "10"
+}
+{
+"classname" "objective"
+"origin" "0 192 32"
+"objective_id" "obj_gen"
+"description" "Destroy generator"
+"required" "1"
+"targetname" "obj_gen"
+}
+{
+"classname" "checkpoint"
+"origin" "-192 0 32"
+"checkpoint_id" "cp1"
+}
+{
+"classname" "mission_start"
+"origin" "-192 64 32"
+"mission" "mission1"
+}
+{
+"classname" "mission_end"
+"origin" "192 -64 32"
+}

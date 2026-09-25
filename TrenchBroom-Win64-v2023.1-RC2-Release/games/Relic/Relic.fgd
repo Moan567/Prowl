@@ -1,0 +1,430 @@
+// Relic FGD for TrenchBroom - Z-Up, 1 unit = 1 inch
+// Standalone: no includes, no external FGD requirements.
+// Syntax follows TrenchBroom FGD grammar: size(min, max) uses a comma,
+// model() uses an EL dictionary with a concrete path.
+
+@PointClass color(0 255 0) size(-53 -47 -29, 46 38 48) model({ "path": "Models/player.mdl" }) = player_start : "Player Spawn" [
+    angle(integer) : "Yaw" : 0 : "Yaw angle"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 0 0) size(-35 -38 -27, 33 34 37) model({ "path": "Models/soldier.mdl" }) = enemy_soldier : "Enemy Soldier" [
+    angle(integer) : "Yaw" : 0
+    health(integer) : "Health" : 100
+    weapon(string) : "Weapon" : "rifle"
+    targetname(string) : "Name"
+    model(string) : "Model" : "soldier.mdl"
+]
+
+@PointClass color(180 0 0) size(-41 -38 -27, 41 32 30) model({ "path": "Models/dog.mdl" }) = enemy_dog : "Enemy Dog" [
+    angle(integer) : "Yaw" : 0
+    health(integer) : "Health" : 50
+    targetname(string) : "Name"
+    model(string) : "Model" : "dog.mdl"
+]
+
+@PointClass color(200 0 200) size(-52 -52 -27, 67 46 78) model({ "path": "Models/demon.mdl" }) = enemy_demon : "Enemy Demon" [
+    angle(integer) : "Yaw" : 0
+    health(integer) : "Health" : 300
+    targetname(string) : "Name"
+    model(string) : "Model" : "demon.mdl"
+]
+
+@PointClass color(0 255 255) size(-16 -16 0, 16 16 16) = weapon_pickup : "Weapon Pickup" [
+    weapon(string) : "Weapon" : "Rifle" : "WeaponDefinition name"
+    targetname(string) : "Name"
+]
+
+@PointClass color(0 255 0) size(-16 -16 0, 16 16 16) = health_pickup : "Health Pickup" [
+    heal(integer) : "Heal Amount" : 25
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 255 0) size(-16 -16 0, 16 16 32) model({ "path": "Models/crate.obj" }) = prop_static : "Static Prop" [
+    model(string) : "Model" : "crate.obj" : "Path relative to Assets/Models"
+    targetname(string) : "Name"
+    angle(integer) : "Yaw" : 0
+]
+
+@PointClass color(255 255 150) size(-8 -8 -8, 8 8 8) = light : "Point Light" [
+    intensity(integer) : "Intensity" : 800
+    radius(integer) : "Range" : 512
+    color(color255) : "Color" : "255 220 180"
+    light(integer) : "Legacy Brightness" : 300
+    targetname(string) : "Name"
+    castShadows(choices) : "Cast Shadows" : 0 = [ 0 : "No" 1 : "Yes" ]
+]
+
+@PointClass color(255 200 100) size(-8 -8 -8, 8 8 8) = light_spot : "Spot Light" [
+    intensity(integer) : "Intensity" : 1200
+    radius(integer) : "Range" : 1024
+    color(color255) : "Color" : "255 220 180"
+    angles(string) : "Angles" : "-45 0 0"
+    targetname(string) : "Name"
+    castShadows(choices) : "Cast Shadows" : 0 = [ 0 : "No" 1 : "Yes" ]
+]
+
+@PointClass color(255 255 50) size(-8 -8 -8, 8 8 8) = light_sun : "Directional Sun" [
+    intensity(float) : "Intensity" : "2.5"
+    angles(string) : "Angles" : "-45 45 0"
+    color(color255) : "Color" : "255 255 255"
+    targetname(string) : "Name"
+]
+
+@PointClass color(100 150 200) size(-16 -16 -16, 16 16 16) = env_fog : "Fog" [
+    color(color255) : "Color" : "120 140 180"
+    density(float) : "Density" : "0.002"
+    targetname(string) : "Name"
+]
+
+@PointClass color(150 100 200) size(-16 -16 -16, 16 16 16) = env_postprocess : "Post Process" [
+    bloom(choices) : "Bloom" : 1 = [ 0 : "Off" 1 : "On" ]
+    exposure(float) : "Exposure" : "1.1"
+    bloom_intensity(float) : "Bloom Intensity" : "1.0"
+    bloom_threshold(float) : "Bloom Threshold" : "1.0"
+    tonemap(choices) : "Tone Map" : "ACES" = [ "Reinhard" : "Reinhard" "ACES" : "ACES" ]
+    targetname(string) : "Name"
+]
+
+@SolidClass color(255 0 255) = trigger_once : "Trigger Once" [
+    target(string) : "Target"
+    targetname(string) : "Name"
+]
+
+@SolidClass color(64 64 64) = worldspawn : "World Spawn" [
+]
+
+// ---------------- Phase 10: audio ----------------
+
+@PointClass color(100 200 255) size(-8 -8 -8, 8 8 8) = ambient_sound : "Ambient Sound" [
+    sound(string) : "Sound" : "forest_wind.wav"
+    volume(float) : "Volume" : "1.0"
+    radius(integer) : "Radius" : 512
+    loop(choices) : "Loop" : 1 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+]
+
+@PointClass color(100 200 255) size(-8 -8 -8, 8 8 8) = sound_emitter : "Sound Emitter" [
+    sound(string) : "Sound" : ""
+    volume(float) : "Volume" : "1.0"
+    radius(integer) : "Radius" : 256
+    interval(float) : "Interval" : "3.0"
+    targetname(string) : "Name"
+]
+
+@PointClass color(100 200 255) size(-16 -16 -16, 16 16 16) = sound_zone : "Sound Zone" [
+    sound(string) : "Sound" : ""
+    radius(integer) : "Radius" : 256
+    loop(choices) : "Loop" : 1 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+]
+
+@PointClass color(120 180 255) size(-8 -8 -8, 8 8 8) = music_player : "Music Player" [
+    track(string) : "Track" : ""
+    volume(float) : "Volume" : "0.8"
+    loop(choices) : "Loop" : 1 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+]
+
+@PointClass color(120 180 255) size(-8 -8 -8, 8 8 8) = music_trigger : "Music Trigger" [
+    track(string) : "Track" : ""
+    volume(float) : "Volume" : "0.8"
+    targetname(string) : "Name"
+]
+
+@PointClass color(100 160 220) size(-16 -16 -16, 16 16 16) = reverb_zone : "Reverb Zone" [
+    radius(integer) : "Radius" : 256
+    amount(float) : "Amount" : "0.5"
+    targetname(string) : "Name"
+]
+
+// ---------------- Phase 10: triggers ----------------
+
+@SolidClass color(255 0 255) = trigger_multiple : "Trigger Multiple" [
+    target(string) : "Target"
+    targetname(string) : "Name"
+]
+
+@SolidClass color(255 120 120) = trigger_hurt : "Trigger Hurt" [
+    damage(float) : "Damage" : "10.0"
+    interval(float) : "Interval" : "1.0"
+    targetname(string) : "Name"
+]
+
+@SolidClass color(120 255 120) = trigger_heal : "Trigger Heal" [
+    amount(float) : "Amount" : "25.0"
+    targetname(string) : "Name"
+]
+
+@SolidClass color(120 120 255) = trigger_push : "Trigger Push" [
+    force(float) : "Force" : "300.0"
+    direction(string) : "Direction" : "1 0 0"
+    targetname(string) : "Name"
+]
+
+@SolidClass color(255 255 120) = trigger_teleport : "Trigger Teleport" [
+    target(string) : "Target"
+    targetname(string) : "Name"
+]
+
+@SolidClass color(200 200 255) = trigger_sound : "Trigger Sound" [
+    sound(string) : "Sound" : ""
+    targetname(string) : "Name"
+]
+
+@SolidClass color(180 180 255) = trigger_music : "Trigger Music" [
+    track(string) : "Track" : ""
+    targetname(string) : "Name"
+]
+
+// ---------------- Phase 10: doors & movers ----------------
+
+@SolidClass color(180 120 60) = func_door : "Door" [
+    speed(float) : "Speed" : "100.0"
+    wait(float) : "Wait" : "3.0"
+    locked(choices) : "Locked" : 0 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+    target(string) : "Target"
+]
+
+@SolidClass color(180 120 60) = func_door_rotating : "Rotating Door" [
+    speed(float) : "Speed" : "100.0"
+    wait(float) : "Wait" : "3.0"
+    locked(choices) : "Locked" : 0 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+    target(string) : "Target"
+]
+
+@SolidClass color(200 150 80) = func_button : "Button" [
+    speed(float) : "Speed" : "100.0"
+    wait(float) : "Wait" : "3.0"
+    locked(choices) : "Locked" : 0 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+    target(string) : "Target"
+]
+
+@SolidClass color(160 100 50) = func_elevator : "Elevator" [
+    speed(float) : "Speed" : "100.0"
+    wait(float) : "Wait" : "3.0"
+    locked(choices) : "Locked" : 0 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+    target(string) : "Target"
+]
+
+@SolidClass color(160 100 50) = func_platform : "Platform" [
+    speed(float) : "Speed" : "100.0"
+    wait(float) : "Wait" : "3.0"
+    locked(choices) : "Locked" : 0 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+    target(string) : "Target"
+]
+
+@SolidClass color(160 100 50) = func_train : "Train" [
+    speed(float) : "Speed" : "100.0"
+    wait(float) : "Wait" : "3.0"
+    locked(choices) : "Locked" : 0 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+    target(string) : "Target"
+]
+
+// ---------------- Phase 10: logic ----------------
+
+@PointClass color(255 180 80) size(-8 -8 -8, 8 8 8) = logic_timer : "Logic Timer" [
+    interval(float) : "Interval" : "5.0"
+    start_on(choices) : "Start On" : 1 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+    target(string) : "Target"
+]
+
+@PointClass color(255 180 80) size(-8 -8 -8, 8 8 8) = logic_random : "Logic Random" [
+    options(integer) : "Options" : 2
+    seed(integer) : "Seed" : 12345
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 180 80) size(-8 -8 -8, 8 8 8) = logic_relay : "Logic Relay" [
+    target(string) : "Target"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 180 80) size(-8 -8 -8, 8 8 8) = logic_counter : "Logic Counter" [
+    count(integer) : "Count" : 3
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 180 80) size(-8 -8 -8, 8 8 8) = logic_compare : "Logic Compare" [
+    a(float) : "A" : "0.0"
+    b(float) : "B" : "0.0"
+    op(string) : "Operator" : "=="
+    targetname(string) : "Name"
+]
+
+// ---------------- Phase 10: AI pathing ----------------
+
+@PointClass color(80 255 80) size(-8 -8 -8, 8 8 8) = path_corner : "Path Corner" [
+    target(string) : "Next"
+    wait(float) : "Wait" : "0.0"
+    targetname(string) : "Name"
+]
+
+@PointClass color(80 255 80) size(-8 -8 -8, 8 8 8) = path_patrol : "Patrol Route" [
+    speed(float) : "Speed" : "120.0"
+    loop(choices) : "Loop" : 1 = [ 0 : "No" 1 : "Yes" ]
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 80 80) size(-16 -16 0, 16 16 48) = info_enemy_spawn : "Enemy Spawn" [
+    enemy(string) : "Enemy" : "enemy_soldier"
+    count(integer) : "Count" : 1
+    targetname(string) : "Name"
+]
+
+// ---------------- Phase 10: particles ----------------
+
+@PointClass color(200 200 200) size(-8 -8 -8, 8 8 8) = env_particles : "Particles" [
+    effect(string) : "Effect" : "smoke"
+    spawnrate(float) : "Spawn Rate" : "10.0"
+    lifetime(float) : "Lifetime" : "1.0"
+    velocity(string) : "Velocity" : "0 0 32"
+    size(float) : "Size" : "4.0"
+    color(color255) : "Color" : "255 255 255"
+    targetname(string) : "Name"
+]
+
+@PointClass color(150 150 150) size(-8 -8 -8, 8 8 8) = fx_smoke : "Smoke" [
+    spawnrate(float) : "Spawn Rate" : "10.0"
+    lifetime(float) : "Lifetime" : "1.0"
+    velocity(string) : "Velocity" : "0 0 32"
+    size(float) : "Size" : "4.0"
+    color(color255) : "Color" : "200 200 200"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 120 40) size(-8 -8 -8, 8 8 8) = fx_fire : "Fire" [
+    spawnrate(float) : "Spawn Rate" : "20.0"
+    lifetime(float) : "Lifetime" : "0.8"
+    velocity(string) : "Velocity" : "0 0 64"
+    size(float) : "Size" : "6.0"
+    color(color255) : "Color" : "255 120 40"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 220 120) size(-8 -8 -8, 8 8 8) = fx_sparks : "Sparks" [
+    spawnrate(float) : "Spawn Rate" : "30.0"
+    lifetime(float) : "Lifetime" : "0.5"
+    velocity(string) : "Velocity" : "0 0 96"
+    size(float) : "Size" : "2.0"
+    color(color255) : "Color" : "255 220 120"
+    targetname(string) : "Name"
+]
+
+@PointClass color(200 40 40) size(-8 -8 -8, 8 8 8) = fx_blood : "Blood" [
+    spawnrate(float) : "Spawn Rate" : "20.0"
+    lifetime(float) : "Lifetime" : "0.6"
+    velocity(string) : "Velocity" : "0 0 48"
+    size(float) : "Size" : "3.0"
+    color(color255) : "Color" : "200 40 40"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 160 60) size(-16 -16 -16, 16 16 16) = fx_explosion : "Explosion" [
+    spawnrate(float) : "Spawn Rate" : "60.0"
+    lifetime(float) : "Lifetime" : "1.2"
+    velocity(string) : "Velocity" : "0 0 128"
+    size(float) : "Size" : "10.0"
+    color(color255) : "Color" : "255 160 60"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 255 160) size(-8 -8 -8, 8 8 8) = fx_muzzleflash : "Muzzle Flash" [
+    spawnrate(float) : "Spawn Rate" : "40.0"
+    lifetime(float) : "Lifetime" : "0.2"
+    velocity(string) : "Velocity" : "0 0 16"
+    size(float) : "Size" : "5.0"
+    color(color255) : "Color" : "255 255 160"
+    targetname(string) : "Name"
+]
+
+// ---------------- Phase 10: weather & environment ----------------
+
+@PointClass color(120 160 220) size(-16 -16 -16, 16 16 16) = env_rain : "Rain" [
+    density(float) : "Density" : "0.5"
+    intensity(float) : "Intensity" : "1.0"
+    targetname(string) : "Name"
+]
+
+@PointClass color(220 230 255) size(-16 -16 -16, 16 16 16) = env_snow : "Snow" [
+    density(float) : "Density" : "0.5"
+    intensity(float) : "Intensity" : "1.0"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 255 180) size(-16 -16 -16, 16 16 16) = env_lightning : "Lightning" [
+    density(float) : "Density" : "0.5"
+    intensity(float) : "Intensity" : "1.0"
+    targetname(string) : "Name"
+]
+
+@PointClass color(160 200 160) size(-16 -16 -16, 16 16 16) = env_wind : "Wind" [
+    density(float) : "Density" : "0.5"
+    direction(string) : "Direction" : "1 0 0"
+    targetname(string) : "Name"
+]
+
+@PointClass color(180 140 220) size(-16 -16 -16, 16 16 16) = env_skybox : "Skybox" [
+    skybox(string) : "Skybox" : ""
+    targetname(string) : "Name"
+]
+
+@PointClass color(140 180 140) size(-16 -16 -16, 16 16 16) = env_ambient : "Ambient" [
+    density(float) : "Density" : "0.5"
+    intensity(float) : "Intensity" : "1.0"
+    targetname(string) : "Name"
+]
+
+// ---------------- Phase 10: pickups ----------------
+
+@PointClass color(255 200 60) size(-16 -16 0, 16 16 16) = ammo_pickup : "Ammo Pickup" [
+    ammo_type(string) : "Ammo Type" : "rifle"
+    amount(integer) : "Amount" : 10
+    targetname(string) : "Name"
+]
+
+@PointClass color(60 120 255) size(-16 -16 0, 16 16 16) = armor_pickup : "Armor Pickup" [
+    amount(integer) : "Amount" : 50
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 60 60) size(-16 -16 0, 16 16 16) = keycard_pickup : "Keycard Pickup" [
+    key(string) : "Key" : "red"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 160 40) size(-16 -16 0, 16 16 16) = weapon_spawn : "Weapon Spawn" [
+    weapon(string) : "Weapon" : "Shotgun"
+    respawn(float) : "Respawn" : "10.0"
+    targetname(string) : "Name"
+]
+
+// ---------------- Phase 10: mission ----------------
+
+@PointClass color(255 255 255) size(-8 -8 -8, 8 8 8) = objective : "Objective" [
+    objective_id(string) : "ID" : "obj1"
+    description(string) : "Description" : ""
+    required(integer) : "Required" : 1
+    targetname(string) : "Name"
+]
+
+@PointClass color(80 255 180) size(-16 -16 0, 16 16 48) = checkpoint : "Checkpoint" [
+    checkpoint_id(string) : "ID" : "cp1"
+    targetname(string) : "Name"
+]
+
+@PointClass color(80 180 255) size(-8 -8 -8, 8 8 8) = mission_start : "Mission Start" [
+    mission(string) : "Mission" : "mission1"
+    targetname(string) : "Name"
+]
+
+@PointClass color(255 80 180) size(-8 -8 -8, 8 8 8) = mission_end : "Mission End" [
+    targetname(string) : "Name"
+]
